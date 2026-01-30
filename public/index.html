@@ -52,6 +52,8 @@ function buy(){ socket.emit("buy"); }
 function skip(){ socket.emit("skipBuy"); }
 
 socket.on("state", s => {
+  if(!s.board) return;
+
   msg.innerText = s.message || "";
   board.innerHTML = "";
   players.innerHTML = "";
