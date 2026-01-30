@@ -8,45 +8,33 @@
 <style>
 body{font-family:Arial;background:#f2f2f2;padding:10px}
 #board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.tile{background:#fff;border-radius:10px;padding:6px;min-height:120px;position:relative}
-.strip{height:6px;margin:-6px -6px 4px -6px}
-.brown{background:#8b4513}.lightblue{background:#87ceeb}.pink{background:#ff69b4}
-.orange{background:#ffa500}.red{background:#e74c3c}.yellow{background:#f1c40f}
-.green{background:#2ecc71}.blue{background:#3498db}
-
-.token{width:18px;height:18px;border-radius:50%;background:#000;color:#fff;
-font-size:12px;display:flex;align-items:center;justify-content:center;
-position:absolute;bottom:4px;right:4px;font-weight:bold}
-
-.owner{position:absolute;top:6px;right:6px;background:#555;color:#fff;
-width:16px;height:16px;border-radius:50%;font-size:11px;
-display:flex;align-items:center;justify-content:center}
-
-.house{font-size:14px;margin-top:4px}
-.you{font-weight:bold;color:#2980b9}
+.tile{background:#fff;border-radius:8px;padding:6px;min-height:80px;position:relative}
+.token{width:16px;height:16px;border-radius:50%;background:#000;color:#fff;
+font-size:11px;display:flex;align-items:center;justify-content:center;
+position:absolute;bottom:4px;right:4px}
+#buyModal{display:none;background:#fff;border:2px solid #333;padding:10px}
 </style>
 </head>
 
 <body>
 
-<h2>Delhi Monopoly</h2>
+<h2>Delhi Monopoly (Core Restored)</h2>
 
 <input id="name" placeholder="Name">
 <button onclick="join()">Join</button>
-<button onclick="roll()">🎲 Roll</button>
+<button onclick="roll()">Roll</button>
 
 <div id="msg"></div>
 <div id="board"></div>
 <div id="players"></div>
 
-<div id="buyModal" style="display:none">
+<div id="buyModal">
   <button onclick="buy()">Buy</button>
   <button onclick="skip()">Skip</button>
 </div>
 
 <script>
 const socket = io();
-let myId = null;
 
 function join(){ socket.emit("join", name.value); }
 function roll(){ socket.emit("roll"); }
@@ -54,39 +42,15 @@ function buy(){ socket.emit("buy"); }
 function skip(){ socket.emit("skipBuy"); }
 
 socket.on("state", s => {
-  myId = s.yourId || myId;
-
-  msg.innerText = s.message || "";
   board.innerHTML = "";
   players.innerHTML = "";
+  msg.innerText = s.message || "";
   buyModal.style.display = "none";
 
   s.board.forEach((t,i)=>{
     const d=document.createElement("div");
     d.className="tile";
-
-    if(t.color){
-      const st=document.createElement("div");
-      st.className="strip "+t.color;
-      d.appendChild(st);
-    }
-
-    d.innerHTML += `<b>${t.name}</b>${t.price?`<br>₹${t.price}`:""}`;
-
-    if(t.owner){
-      const o=s.players.find(p=>p.id===t.owner);
-      if(o){
-        const ot=document.createElement("div");
-        ot.className="owner";
-        ot.innerText=o.name[0];
-        d.appendChild(ot);
-      }
-      d.innerHTML+=`<div class="house">${"🏠".repeat(t.houses||0)}</div>`;
-    }
-
-    if(s.awaitingBuy && s.awaitingBuy.tileIndex===i && s.awaitingBuy.playerId===myId){
-      buyModal.style.display="block";
-    }
+    d.innerHTML = `<b>${t.name}</b>${t.price?`<br>₹${t.price}`:""}`;
 
     s.players.forEach(p=>{
       if(p.position===i){
@@ -97,21 +61,15 @@ socket.on("state", s => {
       }
     });
 
-    if(t.owner===myId && t.color){
-      const btn=document.createElement("button");
-      btn.innerText="🏠 Build";
-      btn.onclick=e=>{e.stopPropagation();socket.emit("buildHouse",i)};
-      d.appendChild(btn);
-    }
-
     board.appendChild(d);
   });
 
+  if(s.awaitingBuy && s.awaitingBuy.playerId === socket.id){
+    buyModal.style.display = "block";
+  }
+
   s.players.forEach(p=>{
-    players.innerHTML += `
-      <div class="${p.id===myId?'you':''}">
-        ${p.name} : ₹${p.money} | 🎲 ${p.lastDice}
-      </div>`;
+    players.innerHTML += `${p.name}: ₹${p.money} | 🎲 ${p.lastDice}<br>`;
   });
 });
 </script>
