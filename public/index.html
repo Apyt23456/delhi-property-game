@@ -1,69 +1,25 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Delhi Monopoly</title>
 <script src="/socket.io/socket.io.js"></script>
 
 <style>
 body{font-family:Arial;background:#f2f2f2;padding:10px}
-#controls{text-align:center;margin-bottom:10px}
-button{padding:6px 12px;margin:4px}
-
 #board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-
-.tile{
-  background:#fff;
-  border-radius:10px;
-  padding:6px;
-  min-height:95px;
-  position:relative;
-  font-size:13px;
-}
-
-.strip{
-  height:6px;
-  border-radius:6px 6px 0 0;
-  margin:-6px -6px 4px -6px;
-}
-
-.brown{background:#8b4513}
-.lightblue{background:#87ceeb}
-.pink{background:#ff69b4}
-.orange{background:#ffa500}
-.red{background:#e74c3c}
-.yellow{background:#f1c40f}
-.green{background:#2ecc71}
-.blue{background:#3498db}
-
+.tile{background:#fff;border-radius:10px;padding:6px;min-height:95px;position:relative}
+.strip{height:6px;border-radius:6px 6px 0 0;margin:-6px -6px 4px -6px}
+.brown{background:#8b4513}.lightblue{background:#87ceeb}.pink{background:#ff69b4}
+.orange{background:#ffa500}.red{background:#e74c3c}.yellow{background:#f1c40f}
+.green{background:#2ecc71}.blue{background:#3498db}
 .owned-me{border:3px solid #2ecc71}
 .owned-other{border:3px solid #e74c3c}
-
-/* NICE TOKENS */
-.token{
-  width:18px;
-  height:18px;
-  border-radius:50%;
-  background:#000;
-  color:#fff;
-  font-size:12px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  position:absolute;
-  bottom:4px;
-  right:4px;
-  font-weight:bold;
-}
-
-#players{margin-top:10px}
-.playerBox{
-  background:#fff;
-  padding:6px;
-  border-radius:6px;
-  margin-bottom:6px;
-}
-.you{font-weight:bold;color:#2980b9}
+.token{width:18px;height:18px;border-radius:50%;background:#000;color:#fff;
+font-size:12px;display:flex;align-items:center;justify-content:center;
+position:absolute;bottom:4px;right:4px;font-weight:bold}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none}
+.popup{background:#fafafa;border:2px solid #333;padding:15px;border-radius:8px;width:85%;margin:25% auto}
 </style>
 </head>
 
@@ -71,91 +27,66 @@ button{padding:6px 12px;margin:4px}
 
 <h2>Delhi Monopoly</h2>
 
-<div id="controls">
-  <input id="playerName" placeholder="Your name">
-  <button onclick="join()">Join</button>
-  <button onclick="roll()">🎲 Roll</button>
-</div>
+<input id="playerName" placeholder="Name">
+<button onclick="join()">Join</button>
+<button onclick="roll()">🎲 Roll</button>
 
-<div id="message"></div>
+<div id="msg"></div>
 <div id="board"></div>
-<div id="buyArea" style="text-align:center;margin-top:8px"></div>
-<div id="players"></div>
+<div id="buyArea" style="text-align:center"></div>
+
+<button onclick="showInfo('chance')">Chance</button>
+<button onclick="showInfo('community')">Community</button>
+
+<div id="info" class="overlay"><div class="popup">
+<span onclick="hideInfo()" style="float:right;cursor:pointer">✖</span>
+<div id="infoText"></div></div></div>
+
+<div id="card" class="overlay"><div class="popup">
+<b id="cardTitle"></b><br><br>
+<div id="cardText"></div><br>
+<button onclick="closeCard()">OK</button>
+</div></div>
 
 <script>
-const socket = io();
+const socket=io();
 
 function join(){
-  const name = document.getElementById("playerName").value.trim();
-  if(!name){ alert("Enter name"); return; }
-  socket.emit("join", name);
+ const n=playerName.value.trim();
+ if(!n) return alert("Enter name");
+ socket.emit("join",n);
 }
-
-function roll(){
-  socket.emit("roll");
+function roll(){socket.emit("roll")}
+function buy(){socket.emit("buy")}
+function closeCard(){socket.emit("closeCard")}
+function showInfo(t){
+ infoText.innerHTML=t==="chance"
+ ?"<b>Chance</b><br>Movement & money cards"
+ :"<b>Community</b><br>Bank & fees";
+ info.style.display="block";
 }
+function hideInfo(){info.style.display="none"}
 
-function buy(){
-  socket.emit("buy");
-}
-
-socket.on("state", state => {
-  document.getElementById("message").innerText = state.message || "";
-
-  const boardDiv = document.getElementById("board");
-  const buyArea = document.getElementById("buyArea");
-  const playersDiv = document.getElementById("players");
-
-  boardDiv.innerHTML = "";
-  buyArea.innerHTML = "";
-
-  state.board.forEach((t,i)=>{
-    const div = document.createElement("div");
-    div.className = "tile";
-
-    if(t.color){
-      const strip = document.createElement("div");
-      strip.className = "strip " + t.color;
-      div.appendChild(strip);
-    }
-
-    div.innerHTML += `<b>${t.name}</b>`;
-    if(t.price) div.innerHTML += `<br>₹${t.price}`;
-
-    if(t.owner){
-      div.classList.add(
-        t.owner === socket.id ? "owned-me" : "owned-other"
-      );
-    }
-
-    state.players.forEach(p=>{
-      if(p.position === i){
-        const tok = document.createElement("div");
-        tok.className = "token";
-        tok.innerText = p.name[0];
-        div.appendChild(tok);
-      }
-    });
-
-    boardDiv.appendChild(div);
-  });
-
-  if(state.awaitingBuy && state.awaitingBuy.playerId === socket.id){
-    const tile = state.board[state.awaitingBuy.tileIndex];
-    buyArea.innerHTML =
-      `<button onclick="buy()">Buy ${tile.name} (₹${tile.price})</button>`;
-  }
-
-  playersDiv.innerHTML = "";
-  state.players.forEach(p=>{
-    playersDiv.innerHTML += `
-      <div class="playerBox">
-        <span class="${p.id===socket.id?'you':''}">
-          ${p.name} ${p.id===socket.id?'(YOU)':''}
-        </span><br>
-        💰 ₹${p.money} | 📍 ${p.position+1}
-      </div>`;
-  });
+socket.on("state",s=>{
+ msg.innerText=s.message||"";
+ board.innerHTML=""; buyArea.innerHTML="";
+ s.board.forEach((t,i)=>{
+  const d=document.createElement("div"); d.className="tile";
+  if(t.color){const st=document.createElement("div");st.className="strip "+t.color;d.appendChild(st)}
+  d.innerHTML+=`<b>${t.name}</b>${t.price?`<br>₹${t.price}`:""}`;
+  if(t.owner) d.classList.add(t.owner===socket.id?"owned-me":"owned-other");
+  s.players.forEach(p=>{if(p.position===i){const tok=document.createElement("div");tok.className="token";tok.innerText=p.name[0];d.appendChild(tok)}})
+  board.appendChild(d);
+ });
+ if(s.awaitingBuy&&s.awaitingBuy.playerId===socket.id){
+  const t=s.board[s.awaitingBuy.tileIndex];
+  buyArea.innerHTML=`<button onclick="buy()">Buy ${t.name} (₹${t.price})</button>`;
+ }
+ if(s.cardPopup){
+  cardTitle.innerText=s.cardPopup.title;
+  cardText.innerText=s.cardPopup.text;
+  card.style.display="block";
+ }else card.style.display="none";
 });
 </script>
 
