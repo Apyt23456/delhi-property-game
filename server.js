@@ -4,7 +4,14 @@ const { Server } = require("socket.io");
 
 const app = express();
 const server = http.createServer(app);
-const io = new Server(server);
+
+/* 🔥 CRITICAL FIX: ENABLE CORS */
+const io = new Server(server, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 app.use(express.static("public"));
 
@@ -55,32 +62,19 @@ let awaitingBuy = null;
 let message = "";
 
 /* helpers */
-function ownsFullSet(pid, color){
-  return board.filter(t => t.color === color).every(t => t.owner === pid);
-}
-function canBuildEvenly(pid, color, idx){
-  const group = board.filter(t => t.color === color && t.owner === pid);
-  const min = Math.min(...group.map(t => t.houses));
-  return board[idx].houses === min;
-}
-function emit(toSocket){
-  const payload = {
-    board,
-    players,
-    turn,
-    awaitingBuy,
-    message,
-    yourId: toSocket?.id || null
-  };
-  toSocket ? toSocket.emit("state", payload) : io.emit("state", payload);
+function emit(socket=null){
+  const payload = { board, players, turn, awaitingBuy, message };
+  socket ? socket.emit("state", payload) : io.emit("state", payload);
 }
 
 io.on("connection", socket => {
+  console.log("CONNECTED:", socket.id);
 
-  emit(socket); // send initial state + yourId
+  emit(socket);
 
   socket.on("join", name => {
     if (!name || players.find(p => p.id === socket.id)) return;
+
     players.push({
       id: socket.id,
       name,
@@ -88,6 +82,8 @@ io.on("connection", socket => {
       position: 0,
       lastDice: "-"
     });
+
+    console.log("JOIN:", name);
     emit();
   });
 
@@ -100,58 +96,9 @@ io.on("connection", socket => {
     p.lastDice = `${d1}+${d2}`;
 
     p.position = (p.position + d1 + d2) % board.length;
-    const tile = board[p.position];
-    message = `${p.name} rolled ${p.lastDice} → ${tile.name}`;
-
-    if (tile.type === "gojail") {
-      p.position = JAIL_INDEX;
-      turn = (turn + 1) % players.length;
-      emit();
-      return;
-    }
-
-    if (tile.price && !tile.owner) {
-      awaitingBuy = { playerId: p.id, tileIndex: p.position };
-      emit();
-      return;
-    }
+    message = `${p.name} rolled ${p.lastDice}`;
 
     turn = (turn + 1) % players.length;
-    emit();
-  });
-
-  socket.on("buy", () => {
-    if (!awaitingBuy) return;
-    const p = players.find(x => x.id === awaitingBuy.playerId);
-    const t = board[awaitingBuy.tileIndex];
-    if (p.money >= t.price) {
-      p.money -= t.price;
-      t.owner = p.id;
-    }
-    awaitingBuy = null;
-    turn = (turn + 1) % players.length;
-    emit();
-  });
-
-  socket.on("skipBuy", () => {
-    awaitingBuy = null;
-    turn = (turn + 1) % players.length;
-    emit();
-  });
-
-  socket.on("buildHouse", idx => {
-    const p = players[turn];
-    const t = board[idx];
-    if (!t || t.owner !== p.id) return;
-    if (!ownsFullSet(p.id, t.color)) return;
-    if (!canBuildEvenly(p.id, t.color, idx)) return;
-    if (t.houses >= 4) return;
-
-    const cost = Math.floor(t.price * 0.5);
-    if (p.money < cost) return;
-
-    p.money -= cost;
-    t.houses++;
     emit();
   });
 
