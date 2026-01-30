@@ -3,16 +3,121 @@
 <head>
   <title>Delhi Property Game</title>
   <script src="/socket.io/socket.io.js"></script>
+
   <style>
-    body { font-family: Arial; background:#f2f2f2; padding:10px }
-    #board { display:grid; grid-template-columns:repeat(4,1fr); gap:8px }
-    .tile { background:#fff; padding:6px; border-radius:8px; min-height:100px }
-    .owned { border:3px solid #2ecc71 }
-    .house { color:green; font-weight:bold }
-    .token { background:#3498db; color:#fff; padding:2px 5px; border-radius:10px; font-size:12px }
-    .player { background:#fff; padding:6px; margin:5px 0; border-radius:6px }
-    #popup { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none }
-    #popupBox { background:#fff; padding:15px; width:80%; margin:30% auto; border-radius:8px }
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      padding: 10px;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    #controls {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    input {
+      padding: 6px;
+      font-size: 14px;
+    }
+
+    button {
+      padding: 6px 10px;
+      margin-left: 4px;
+      font-size: 14px;
+    }
+
+    #msg {
+      text-align: center;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .tile {
+      background: #fff;
+      border-radius: 8px;
+      padding: 6px;
+      min-height: 110px;
+      position: relative;
+      font-size: 13px;
+    }
+
+    .owned {
+      border: 3px solid #2ecc71;
+    }
+
+    /* ===== COLOR GROUP STRIP ===== */
+    .color-bar {
+      height: 8px;
+      border-radius: 8px 8px 0 0;
+      margin: -6px -6px 6px -6px;
+    }
+
+    .color-brown { background: #8b4513; }
+    .color-lightblue { background: #87ceeb; }
+    .color-pink { background: #ff69b4; }
+    .color-orange { background: #ffa500; }
+    .color-red { background: #e74c3c; }
+    .color-yellow { background: #f1c40f; }
+    .color-green { background: #27ae60; }
+    .color-blue { background: #2980b9; }
+
+    /* ===== TOKENS ===== */
+    .token {
+      display: inline-block;
+      background: #3498db;
+      color: #fff;
+      padding: 2px 6px;
+      border-radius: 10px;
+      font-size: 12px;
+      margin: 2px 2px 0 0;
+    }
+
+    /* ===== HOUSES ===== */
+    .houses {
+      color: green;
+      font-size: 14px;
+    }
+
+    /* ===== PLAYERS PANEL ===== */
+    #players {
+      margin-top: 15px;
+    }
+
+    .player {
+      background: #fff;
+      padding: 6px;
+      margin: 5px 0;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    /* ===== BUY POPUP ===== */
+    #popup {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: none;
+    }
+
+    #popupBox {
+      background: #fff;
+      padding: 15px;
+      width: 80%;
+      margin: 30% auto;
+      border-radius: 8px;
+      text-align: center;
+    }
   </style>
 </head>
 
@@ -20,14 +125,19 @@
 
 <h2>Delhi Property Game</h2>
 
-<input id="playerName" placeholder="Name">
-<button onclick="join()">Join</button>
-<button onclick="roll()">🎲 Roll</button>
+<div id="controls">
+  <input id="playerName" placeholder="Your name">
+  <button onclick="join()">Join</button>
+  <button onclick="roll()">🎲 Roll</button>
+</div>
 
 <div id="msg"></div>
+
 <div id="board"></div>
+
 <div id="players"></div>
 
+<!-- BUY POPUP -->
 <div id="popup">
   <div id="popupBox">
     <div id="popupText"></div><br>
@@ -40,16 +150,42 @@
 const socket = io();
 let myId = null;
 
-socket.on("connect", () => myId = socket.id);
+const boardDiv = document.getElementById("board");
+const playersDiv = document.getElementById("players");
+const msgDiv = document.getElementById("msg");
+const popup = document.getElementById("popup");
+const popupText = document.getElementById("popupText");
 
-function join(){ socket.emit("join", playerName.value); }
-function roll(){ socket.emit("roll"); }
-function buy(){ socket.emit("buy"); }
-function skip(){ socket.emit("skip"); }
+socket.on("connect", () => {
+  myId = socket.id;
+});
+
+function join() {
+  const name = document.getElementById("playerName").value.trim();
+  if (!name) {
+    alert("Enter your name");
+    return;
+  }
+  socket.emit("join", name);
+}
+
+function roll() {
+  socket.emit("roll");
+}
+
+function buy() {
+  socket.emit("buy");
+}
+
+function skip() {
+  socket.emit("skip");
+}
 
 socket.on("update", g => {
-  msg.innerText = g.message || "";
-  board.innerHTML = "";
+  msgDiv.innerText = g.message || "";
+
+  /* ===== BOARD ===== */
+  boardDiv.innerHTML = "";
 
   g.board.forEach(t => {
     const tokens = g.players
@@ -57,32 +193,37 @@ socket.on("update", g => {
       .map(p => `<span class="token">${p.name[0]}</span>`)
       .join("");
 
-    const houses = t.houses ? "🏠".repeat(t.houses) : "";
+    const houseIcons = t.houses ? "🏠".repeat(t.houses) : "";
 
     const canBuild =
-      t.owner === myId &&
       t.color &&
+      t.owner === myId &&
       g.players[g.turnIndex]?.id === myId;
 
-    board.innerHTML += `
-      <div class="tile ${t.owner ? "owned":""}">
+    boardDiv.innerHTML += `
+      <div class="tile ${t.owner ? "owned" : ""}">
+        ${t.color ? `<div class="color-bar color-${t.color}"></div>` : ""}
         <b>${t.name}</b><br>
-        ${t.price ? "₹"+t.price : ""}<br>
-        <span class="house">${houses}</span>
+        ${t.price ? "₹" + t.price : ""}
+        <div class="houses">${houseIcons}</div>
         <div>${tokens}</div>
         ${canBuild ? `<button onclick="socket.emit('buildHouse', ${t.id})">Build</button>` : ""}
-      </div>`;
+      </div>
+    `;
   });
 
-  players.innerHTML = "<h3>Players</h3>";
-  g.players.forEach((p,i)=>{
-    players.innerHTML += `
+  /* ===== PLAYERS PANEL ===== */
+  playersDiv.innerHTML = "<h3>Players</h3>";
+  g.players.forEach((p, i) => {
+    playersDiv.innerHTML += `
       <div class="player">
         ${p.name} | ₹${p.money}
         ${i === g.turnIndex ? " ← Turn" : ""}
-      </div>`;
+      </div>
+    `;
   });
 
+  /* ===== BUY POPUP ===== */
   if (g.awaitingBuy === myId) {
     const me = g.players[g.turnIndex];
     const tile = g.board[me.position - 1];
