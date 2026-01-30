@@ -5,75 +5,73 @@ const { Server } = require("socket.io");
 const app = express();
 const server = http.createServer(app);
 
-/* 🔥 CRITICAL FIX: ENABLE CORS */
+/* ✅ CORS ENABLED */
 const io = new Server(server, {
-  cors: {
-    origin: "*",
-    methods: ["GET", "POST"]
-  }
+  cors: { origin: "*", methods: ["GET","POST"] }
 });
 
 app.use(express.static("public"));
 
-const JAIL_INDEX = 9;
-
-/* ===== BOARD ===== */
+/* ===== BOARD (SIMPLE, STABLE) ===== */
 const board = [
-  {name:"GO", type:"go"},
-  {name:"Yamuna Vihar", price:100, color:"brown", owner:null, houses:0},
-  {name:"Shahdara", price:120, color:"brown", owner:null, houses:0},
-  {name:"Chance", type:"chance"},
-  {name:"Income Tax", type:"tax", amount:200},
-  {name:"Rajiv Chowk Metro", type:"metro", price:200, owner:null},
-  {name:"Mayur Vihar", price:140, color:"lightblue", owner:null, houses:0},
-  {name:"Laxmi Nagar", price:160, color:"lightblue", owner:null, houses:0},
-  {name:"Preet Vihar", price:180, color:"lightblue", owner:null, houses:0},
-  {name:"Jail", type:"jail"},
-  {name:"Lajpat Nagar", price:200, color:"pink", owner:null, houses:0},
-  {name:"Malviya Nagar", price:220, color:"pink", owner:null, houses:0},
-  {name:"Saket", price:240, color:"pink", owner:null, houses:0},
-  {name:"Kashmere Gate Metro", type:"metro", price:200, owner:null},
-  {name:"Rohini", price:260, color:"orange", owner:null, houses:0},
-  {name:"Pitampura", price:280, color:"orange", owner:null, houses:0},
-  {name:"Shalimar Bagh", price:300, color:"orange", owner:null, houses:0},
-  {name:"Free Parking", type:"free"},
-  {name:"Karol Bagh", price:320, color:"red", owner:null, houses:0},
-  {name:"Narela", price:340, color:"red", owner:null, houses:0},
-  {name:"Punjabi Bagh", price:360, color:"red", owner:null, houses:0},
-  {name:"INA Metro", type:"metro", price:200, owner:null},
-  {name:"Janakpuri", price:380, color:"yellow", owner:null, houses:0},
-  {name:"Dwarka", price:400, color:"yellow", owner:null, houses:0},
-  {name:"Uttam Nagar", price:420, color:"yellow", owner:null, houses:0},
-  {name:"Go To Jail", type:"gojail"},
-  {name:"Greater Kailash", price:450, color:"green", owner:null, houses:0},
-  {name:"South Extension", price:470, color:"green", owner:null, houses:0},
-  {name:"Defence Colony", price:500, color:"green", owner:null, houses:0},
-  {name:"Central Secretariat Metro", type:"metro", price:200, owner:null},
-  {name:"Community Chest", type:"community"},
-  {name:"Luxury Tax", type:"tax", amount:150},
-  {name:"Chanakyapuri", price:550, color:"blue", owner:null, houses:0},
-  {name:"Civil Lines", price:580, color:"blue", owner:null, houses:0},
-  {name:"GO", type:"go"}
+  {name:"GO"},
+  {name:"Yamuna Vihar", price:100},
+  {name:"Shahdara", price:120},
+  {name:"Chance"},
+  {name:"Income Tax"},
+  {name:"Rajiv Chowk Metro", price:200},
+  {name:"Mayur Vihar", price:140},
+  {name:"Laxmi Nagar", price:160},
+  {name:"Preet Vihar", price:180},
+  {name:"Jail"},
+  {name:"Lajpat Nagar", price:200},
+  {name:"Malviya Nagar", price:220},
+  {name:"Saket", price:240},
+  {name:"Kashmere Gate Metro", price:200},
+  {name:"Rohini", price:260},
+  {name:"Pitampura", price:280},
+  {name:"Shalimar Bagh", price:300},
+  {name:"Free Parking"},
+  {name:"Karol Bagh", price:320},
+  {name:"Narela", price:340},
+  {name:"Punjabi Bagh", price:360},
+  {name:"INA Metro", price:200},
+  {name:"Janakpuri", price:380},
+  {name:"Dwarka", price:400},
+  {name:"Uttam Nagar", price:420},
+  {name:"Go To Jail"},
+  {name:"Greater Kailash", price:450},
+  {name:"South Extension", price:470},
+  {name:"Defence Colony", price:500},
+  {name:"Central Secretariat Metro", price:200},
+  {name:"Community Chest"},
+  {name:"Luxury Tax"},
+  {name:"Chanakyapuri", price:550},
+  {name:"Civil Lines", price:580},
+  {name:"GO"}
 ];
+
+/* Ownership map */
+board.forEach(t => t.owner = null);
 
 let players = [];
 let turn = 0;
 let awaitingBuy = null;
 let message = "";
 
-/* helpers */
+/* ===== EMIT ===== */
 function emit(socket=null){
-  const payload = { board, players, turn, awaitingBuy, message };
-  socket ? socket.emit("state", payload) : io.emit("state", payload);
+  const state = { board, players, turn, awaitingBuy, message };
+  socket ? socket.emit("state", state) : io.emit("state", state);
 }
 
 io.on("connection", socket => {
-  console.log("CONNECTED:", socket.id);
+  console.log("CONNECTED", socket.id);
 
-  emit(socket);
+  emit(socket); // ✅ send board immediately
 
   socket.on("join", name => {
-    if (!name || players.find(p => p.id === socket.id)) return;
+    if(!name || players.find(p=>p.id===socket.id)) return;
 
     players.push({
       id: socket.id,
@@ -83,28 +81,57 @@ io.on("connection", socket => {
       lastDice: "-"
     });
 
-    console.log("JOIN:", name);
+    message = `${name} joined`;
     emit();
   });
 
   socket.on("roll", () => {
     const p = players[turn];
-    if (!p || p.id !== socket.id || awaitingBuy) return;
+    if(!p || p.id !== socket.id || awaitingBuy) return;
 
-    const d1 = Math.floor(Math.random()*6)+1;
-    const d2 = Math.floor(Math.random()*6)+1;
-    p.lastDice = `${d1}+${d2}`;
+    const d = Math.floor(Math.random()*6)+1;
+    p.lastDice = d;
+    p.position = (p.position + d) % board.length;
 
-    p.position = (p.position + d1 + d2) % board.length;
-    message = `${p.name} rolled ${p.lastDice}`;
+    const tile = board[p.position];
+    message = `${p.name} rolled ${d} → ${tile.name}`;
 
-    turn = (turn + 1) % players.length;
+    if(tile.price && !tile.owner){
+      awaitingBuy = { playerId: p.id, tileIndex: p.position };
+      emit();
+      return;
+    }
+
+    turn = (turn+1) % players.length;
+    emit();
+  });
+
+  socket.on("buy", () => {
+    if(!awaitingBuy) return;
+
+    const p = players.find(x=>x.id===awaitingBuy.playerId);
+    const t = board[awaitingBuy.tileIndex];
+
+    if(p.money >= t.price){
+      p.money -= t.price;
+      t.owner = p.id;
+      message = `${p.name} bought ${t.name}`;
+    }
+
+    awaitingBuy = null;
+    turn = (turn+1) % players.length;
+    emit();
+  });
+
+  socket.on("skipBuy", () => {
+    awaitingBuy = null;
+    turn = (turn+1) % players.length;
     emit();
   });
 
   socket.on("disconnect", () => {
-    players = players.filter(p => p.id !== socket.id);
-    if (turn >= players.length) turn = 0;
+    players = players.filter(p=>p.id!==socket.id);
+    if(turn >= players.length) turn = 0;
     emit();
   });
 });
