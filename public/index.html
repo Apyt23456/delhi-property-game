@@ -3,22 +3,16 @@
 <head>
   <title>Delhi Property Game</title>
   <script src="/socket.io/socket.io.js"></script>
-
   <style>
     body { font-family: Arial; background:#f2f2f2; padding:10px }
     #board { display:grid; grid-template-columns:repeat(4,1fr); gap:8px }
-    .tile { background:#fff; padding:6px; border-radius:8px; min-height:90px; position:relative }
+    .tile { background:#fff; padding:6px; border-radius:8px; min-height:100px }
     .owned { border:3px solid #2ecc71 }
-    .token {
-      font-size:12px;
-      padding:2px 5px;
-      border-radius:10px;
-      color:#fff;
-      margin:2px;
-      display:inline-block;
-    }
+    .house { color:green; font-weight:bold }
+    .token { background:#3498db; color:#fff; padding:2px 5px; border-radius:10px; font-size:12px }
+    .player { background:#fff; padding:6px; margin:5px 0; border-radius:6px }
     #popup { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none }
-    #popupBox { background:#fff; padding:15px; width:80%; margin:30% auto; border-radius:8px; text-align:center }
+    #popupBox { background:#fff; padding:15px; width:80%; margin:30% auto; border-radius:8px }
   </style>
 </head>
 
@@ -32,6 +26,7 @@
 
 <div id="msg"></div>
 <div id="board"></div>
+<div id="players"></div>
 
 <div id="popup">
   <div id="popupBox">
@@ -47,11 +42,7 @@ let myId = null;
 
 socket.on("connect", () => myId = socket.id);
 
-function join(){
-  const name = playerName.value.trim();
-  if (!name) return alert("Enter name");
-  socket.emit("join", name);
-}
+function join(){ socket.emit("join", playerName.value); }
 function roll(){ socket.emit("roll"); }
 function buy(){ socket.emit("buy"); }
 function skip(){ socket.emit("skip"); }
@@ -61,16 +52,34 @@ socket.on("update", g => {
   board.innerHTML = "";
 
   g.board.forEach(t => {
-    let tokens = g.players
+    const tokens = g.players
       .filter(p => p.position === t.id)
-      .map(p => `<span class="token" style="background:#3498db">${p.name[0]}</span>`)
+      .map(p => `<span class="token">${p.name[0]}</span>`)
       .join("");
+
+    const houses = t.houses ? "🏠".repeat(t.houses) : "";
+
+    const canBuild =
+      t.owner === myId &&
+      t.color &&
+      g.players[g.turnIndex]?.id === myId;
 
     board.innerHTML += `
       <div class="tile ${t.owner ? "owned":""}">
         <b>${t.name}</b><br>
-        ${t.price ? "₹"+t.price : ""}
+        ${t.price ? "₹"+t.price : ""}<br>
+        <span class="house">${houses}</span>
         <div>${tokens}</div>
+        ${canBuild ? `<button onclick="socket.emit('buildHouse', ${t.id})">Build</button>` : ""}
+      </div>`;
+  });
+
+  players.innerHTML = "<h3>Players</h3>";
+  g.players.forEach((p,i)=>{
+    players.innerHTML += `
+      <div class="player">
+        ${p.name} | ₹${p.money}
+        ${i === g.turnIndex ? " ← Turn" : ""}
       </div>`;
   });
 
