@@ -1,71 +1,140 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Delhi Property Game</title>
-<script src="/socket.io/socket.io.js"></script>
-<style>
-body{font-family:Arial;background:#f2f2f2;padding:10px}
-#board{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
-.tile{background:#fff;padding:6px;border-radius:6px;font-size:12px}
-.player{background:#fff;margin:6px;padding:6px;border-radius:6px}
-#buyBox{background:#fff;padding:10px;margin-top:10px}
-</style>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Delhi Property Game</title>
+
+  <script src="/socket.io/socket.io.js"></script>
+
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f2f2f2;
+      margin: 0;
+      padding: 10px;
+    }
+
+    h2 {
+      text-align: center;
+    }
+
+    #controls {
+      text-align: center;
+      margin-bottom: 10px;
+    }
+
+    input {
+      padding: 6px;
+      font-size: 14px;
+    }
+
+    button {
+      padding: 6px 12px;
+      font-size: 14px;
+      margin-left: 5px;
+    }
+
+    #message {
+      text-align: center;
+      margin: 10px 0;
+      font-weight: bold;
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .tile {
+      background: #fff;
+      border-radius: 8px;
+      padding: 6px;
+      min-height: 80px;
+      font-size: 13px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    .tile strong {
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    #players {
+      margin-top: 15px;
+    }
+
+    .player {
+      background: #fff;
+      margin: 5px 0;
+      padding: 6px;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+  </style>
 </head>
+
 <body>
 
-<h2>Delhi Property Game</h2>
+  <h2>Delhi Property Game</h2>
 
-<input id="name" placeholder="Your name">
-<button onclick="join()">Join</button>
-<button onclick="roll()">🎲 Roll</button>
+  <div id="controls">
+    <input id="name" placeholder="Your name">
+    <button onclick="joinGame()">Join</button>
+    <button onclick="rollDice()">🎲 Roll</button>
+  </div>
 
-<h3 id="turn"></h3>
-<p id="msg"></p>
+  <div id="message"></div>
 
-<div id="board"></div>
-<div id="players"></div>
+  <div id="board"></div>
 
-<div id="buyBox" style="display:none">
-  <p id="buyText"></p>
-  <button onclick="buy()">Buy</button>
-  <button onclick="skip()">Skip</button>
-</div>
+  <div id="players"></div>
 
 <script>
-const socket = io();
-let myId = null;
+  const socket = io();
 
-socket.on("connect", () => myId = socket.id);
+  const boardDiv = document.getElementById("board");
+  const playersDiv = document.getElementById("players");
+  const messageDiv = document.getElementById("message");
 
-function join(){ socket.emit("join", name.value); }
-function roll(){ socket.emit("roll"); }
-function buy(){ socket.emit("buy"); buyBox.style.display="none"; }
-function skip(){ socket.emit("skip"); buyBox.style.display="none"; }
-
-  // render board immediately
-for(let i=1;i<=40;i++){
-  board.innerHTML += `<div class="tile">Tile ${i}</div>`;
-}
-socket.on("update", g => {
-  turn.innerText = g.players.length ? "Turn: " + g.players[g.turn].name : "";
-  msg.innerText = g.message || "";
-
-  board.innerHTML = "";
-  for(let i=1;i<=40;i++){
-    board.innerHTML += `<div class="tile">Tile ${i}</div>`;
+  function joinGame() {
+    const name = document.getElementById("name").value.trim();
+    if (!name) return alert("Enter name");
+    socket.emit("join", name);
   }
 
-  players.innerHTML = "";
-  g.players.forEach(p=>{
-    players.innerHTML += `<div class="player">${p.name} | ₹${p.money} | Pos ${p.position}</div>`;
+  function rollDice() {
+    socket.emit("roll");
+  }
+
+  socket.on("update", game => {
+    // MESSAGE
+    messageDiv.innerText = game.message || "";
+
+    // BOARD
+    if (game.board) {
+      boardDiv.innerHTML = "";
+      game.board.forEach(tile => {
+        boardDiv.innerHTML += `
+          <div class="tile">
+            <strong>${tile.name}</strong>
+            ${tile.price ? "₹" + tile.price : ""}
+          </div>
+        `;
+      });
+    }
+
+    // PLAYERS
+    playersDiv.innerHTML = "<h3>Players</h3>";
+    game.players.forEach((p, i) => {
+      playersDiv.innerHTML += `
+        <div class="player">
+          ${p.name} | ₹${p.money} | Position ${p.position}
+          ${i === game.turnIndex ? " ← Turn" : ""}
+        </div>
+      `;
+    });
   });
-
-  if(g.pendingBuy && g.pendingBuy.playerId === myId){
-    buyBox.style.display = "block";
-    buyText.innerText = "Buy " + g.pendingBuy.tile.name + "?";
-  }
-});
 </script>
 
 </body>
