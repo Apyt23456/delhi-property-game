@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delhi Property Game</title>
+<script src="/socket.io/socket.io.js"></script>
+<style>
+body{font-family:Arial;background:#f2f2f2;padding:10px}
+#board{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.tile{background:#fff;padding:6px;border-radius:6px;font-size:12px}
+.player{background:#fff;margin:6px;padding:6px;border-radius:6px}
+#buyBox{background:#fff;padding:10px;margin-top:10px}
+</style>
+</head>
+<body>
+
+<h2>Delhi Property Game</h2>
+
+<input id="name" placeholder="Your name">
+<button onclick="join()">Join</button>
+<button onclick="roll()">🎲 Roll</button>
+
+<h3 id="turn"></h3>
+<p id="msg"></p>
+
+<div id="board"></div>
+<div id="players"></div>
+
+<div id="buyBox" style="display:none">
+  <p id="buyText"></p>
+  <button onclick="buy()">Buy</button>
+  <button onclick="skip()">Skip</button>
+</div>
+
+<script>
+const socket = io();
+let myId = null;
+
+socket.on("connect", () => myId = socket.id);
+
+function join(){ socket.emit("join", name.value); }
+function roll(){ socket.emit("roll"); }
+function buy(){ socket.emit("buy"); buyBox.style.display="none"; }
+function skip(){ socket.emit("skip"); buyBox.style.display="none"; }
+
+socket.on("update", g => {
+  turn.innerText = g.players.length ? "Turn: " + g.players[g.turn].name : "";
+  msg.innerText = g.message || "";
+
+  board.innerHTML = "";
+  for(let i=1;i<=40;i++){
+    board.innerHTML += `<div class="tile">Tile ${i}</div>`;
+  }
+
+  players.innerHTML = "";
+  g.players.forEach(p=>{
+    players.innerHTML += `<div class="player">${p.name} | ₹${p.money} | Pos ${p.position}</div>`;
+  });
+
+  if(g.pendingBuy && g.pendingBuy.playerId === myId){
+    buyBox.style.display = "block";
+    buyText.innerText = "Buy " + g.pendingBuy.tile.name + "?";
+  }
+});
+</script>
+
+</body>
+</html>
