@@ -1,44 +1,19 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Delhi Monopoly</title>
 <script src="/socket.io/socket.io.js"></script>
 
 <style>
-body{
-  font-family:Arial;
-  background:#f2f2f2;
-  margin:0;
-  padding:10px;
-}
-
+body{font-family:Arial;background:#f2f2f2;padding:10px}
 #controls{text-align:center;margin-bottom:10px}
 button{padding:6px 12px;margin:4px}
 
-#message{text-align:center;font-weight:bold;margin-bottom:8px}
+#board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tile{background:#fff;border-radius:10px;min-height:95px;padding:6px;position:relative}
 
-#board{
-  display:grid;
-  grid-template-columns:repeat(4,1fr);
-  gap:8px;
-}
-
-.tile{
-  background:#fff;
-  border-radius:10px;
-  min-height:95px;
-  padding:6px;
-  position:relative;
-  font-size:13px;
-}
-
-.strip{
-  height:6px;
-  border-radius:6px 6px 0 0;
-  margin:-6px -6px 4px -6px;
-}
-
+.strip{height:6px;border-radius:6px 6px 0 0;margin:-6px -6px 4px -6px}
 .brown{background:#8d6e63}
 .lightblue{background:#81d4fa}
 .pink{background:#f48fb1}
@@ -55,44 +30,18 @@ button{padding:6px 12px;margin:4px}
   position:absolute;
   bottom:4px;
   right:4px;
-  font-size:12px;
   background:#000;
   color:#fff;
   padding:2px 6px;
   border-radius:12px;
+  font-size:12px;
 }
 
-#players{
-  margin-top:10px;
-}
-
-.playerBox{
-  background:#fff;
-  border-radius:8px;
-  padding:6px;
-  margin-bottom:6px;
-}
-
+.playerBox{background:#fff;border-radius:8px;padding:6px;margin-top:6px}
 .you{color:#0077ff;font-weight:bold}
 
-/* POPUPS */
-.overlay{
-  position:fixed;
-  inset:0;
-  background:rgba(0,0,0,.5);
-  display:none;
-}
-
-.popup{
-  background:#fafafa;
-  border:2px solid #333;
-  padding:15px;
-  border-radius:8px;
-  width:85%;
-  margin:25% auto;
-}
-
-.close{float:right;cursor:pointer;font-weight:bold}
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none}
+.popup{background:#fafafa;border:2px solid #333;padding:15px;border-radius:8px;width:85%;margin:25% auto}
 </style>
 </head>
 
@@ -107,26 +56,10 @@ button{padding:6px 12px;margin:4px}
 </div>
 
 <div id="message"></div>
-
 <div id="board"></div>
-
+<div id="buyArea" style="text-align:center;margin-top:8px"></div>
 <div id="players"></div>
 
-<!-- Bottom info buttons -->
-<div style="text-align:center;margin-top:10px">
-  <button onclick="showChanceInfo()">Chance</button>
-  <button onclick="showCommunityInfo()">Community</button>
-</div>
-
-<!-- Info popup -->
-<div id="infoOverlay" class="overlay">
-  <div class="popup">
-    <span class="close" onclick="closeInfo()">✖</span>
-    <div id="infoText"></div>
-  </div>
-</div>
-
-<!-- Card popup -->
 <div id="cardOverlay" class="overlay">
   <div class="popup">
     <b id="cardTitle"></b><br><br>
@@ -137,69 +70,51 @@ button{padding:6px 12px;margin:4px}
 
 <script>
 const socket = io();
-let myId = null;
 
 function join(){
-  socket.emit("join", name.value);
+  if(!name.value.trim()){ alert("Enter name"); return; }
+  socket.emit("join", name.value.trim());
 }
 
-function roll(){
-  socket.emit("roll");
-}
-
-function closeCard(){
-  socket.emit("closeCard");
-}
-
-function showChanceInfo(){
-  infoText.innerHTML = `
-  <b>Chance Cards</b><br>
-  • Advance to GO<br>
-  • Go to Jail<br>
-  • Receive / Pay money<br>
-  • Move across board`;
-  infoOverlay.style.display="block";
-}
-
-function showCommunityInfo(){
-  infoText.innerHTML = `
-  <b>Community Chest</b><br>
-  • Bank rewards<br>
-  • Fees & fines<br>
-  • Go to Jail<br>
-  • Player payments`;
-  infoOverlay.style.display="block";
-}
-
-function closeInfo(){
-  infoOverlay.style.display="none";
-}
+function roll(){ socket.emit("roll"); }
+function buy(){ socket.emit("buy"); }
+function closeCard(){ socket.emit("closeCard"); }
 
 socket.on("update", g=>{
   message.innerText = g.message || "";
-
   board.innerHTML="";
-  g.board.forEach(t=>{
+  buyArea.innerHTML="";
+
+  g.board.forEach((t,i)=>{
+    const here = g.players.filter(p=>p.position===i);
+    const tokens = here.map(p=>`<span class="token">${p.name[0]}</span>`).join("");
+
     let cls="tile";
     if(t.owner){
-      cls += (t.owner===myId) ? " owned-me" : " owned-other";
+      cls += (t.owner===socket.id) ? " owned-me" : " owned-other";
     }
+
     board.innerHTML += `
       <div class="${cls}">
-        ${t.color ? `<div class="strip ${t.color}"></div>`:""}
+        ${t.color?`<div class="strip ${t.color}"></div>`:""}
         <b>${t.name}</b>
+        ${tokens}
       </div>`;
   });
 
+  if(g.awaitingBuy && g.awaitingBuy.playerId===socket.id){
+    const tile = g.board[g.awaitingBuy.tileIndex];
+    buyArea.innerHTML = `<button onclick="buy()">Buy ${tile.name} (₹${tile.price})</button>`;
+  }
+
   players.innerHTML="";
   g.players.forEach(p=>{
-    if(!myId && p.id) myId = socket.id;
     players.innerHTML += `
       <div class="playerBox">
         <span class="${p.id===socket.id?'you':''}">
           ${p.name} ${p.id===socket.id?'(YOU)':''}
         </span><br>
-        💰 ₹${p.money} | 📍 ${p.position}
+        💰 ₹${p.money} | 📍 ${p.position+1}
       </div>`;
   });
 
