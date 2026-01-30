@@ -7,19 +7,80 @@
 
 <style>
 body{font-family:Arial;background:#f2f2f2;padding:10px}
-#board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.tile{background:#fff;border-radius:10px;padding:6px;min-height:95px;position:relative}
-.strip{height:6px;border-radius:6px 6px 0 0;margin:-6px -6px 4px -6px}
-.brown{background:#8b4513}.lightblue{background:#87ceeb}.pink{background:#ff69b4}
-.orange{background:#ffa500}.red{background:#e74c3c}.yellow{background:#f1c40f}
-.green{background:#2ecc71}.blue{background:#3498db}
+
+#controls{text-align:center;margin-bottom:10px}
+button{padding:6px 12px;margin:4px}
+
+#board{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px
+}
+
+.tile{
+  background:#fff;
+  border-radius:10px;
+  padding:6px;
+  min-height:95px;
+  position:relative;
+  font-size:13px
+}
+
+.strip{
+  height:6px;
+  border-radius:6px 6px 0 0;
+  margin:-6px -6px 4px -6px
+}
+
+.brown{background:#8b4513}
+.lightblue{background:#87ceeb}
+.pink{background:#ff69b4}
+.orange{background:#ffa500}
+.red{background:#e74c3c}
+.yellow{background:#f1c40f}
+.green{background:#2ecc71}
+.blue{background:#3498db}
+
 .owned-me{border:3px solid #2ecc71}
 .owned-other{border:3px solid #e74c3c}
-.token{width:18px;height:18px;border-radius:50%;background:#000;color:#fff;
-font-size:12px;display:flex;align-items:center;justify-content:center;
-position:absolute;bottom:4px;right:4px;font-weight:bold}
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none}
-.popup{background:#fafafa;border:2px solid #333;padding:15px;border-radius:8px;width:85%;margin:25% auto}
+
+/* PLAYER TOKEN */
+.token{
+  width:18px;height:18px;border-radius:50%;
+  background:#000;color:#fff;
+  font-size:12px;font-weight:bold;
+  display:flex;align-items:center;justify-content:center;
+  position:absolute;bottom:4px;right:4px
+}
+
+/* PLAYER INFO BOX */
+#players{
+  margin-top:10px
+}
+.playerBox{
+  background:#fff;
+  border-radius:8px;
+  padding:6px;
+  margin-bottom:6px;
+  font-size:14px
+}
+.you{color:#2980b9;font-weight:bold}
+
+/* POPUPS */
+.overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.5);
+  display:none
+}
+.popup{
+  background:#fafafa;
+  border:2px solid #333;
+  padding:15px;
+  border-radius:8px;
+  width:85%;
+  margin:25% auto
+}
 </style>
 </head>
 
@@ -27,66 +88,148 @@ position:absolute;bottom:4px;right:4px;font-weight:bold}
 
 <h2>Delhi Monopoly</h2>
 
-<input id="playerName" placeholder="Name">
-<button onclick="join()">Join</button>
-<button onclick="roll()">🎲 Roll</button>
+<div id="controls">
+  <input id="playerName" placeholder="Name">
+  <button onclick="join()">Join</button>
+  <button onclick="roll()">🎲 Roll</button>
+</div>
 
 <div id="msg"></div>
+
 <div id="board"></div>
-<div id="buyArea" style="text-align:center"></div>
 
-<button onclick="showInfo('chance')">Chance</button>
-<button onclick="showInfo('community')">Community</button>
+<!-- PLAYER INFO -->
+<div id="players"></div>
 
-<div id="info" class="overlay"><div class="popup">
-<span onclick="hideInfo()" style="float:right;cursor:pointer">✖</span>
-<div id="infoText"></div></div></div>
+<!-- BUY POPUP -->
+<div id="buyOverlay" class="overlay">
+  <div class="popup">
+    <b id="buyTitle"></b><br><br>
+    <div id="buyPrice"></div><br>
+    <button onclick="confirmBuy()">Buy</button>
+    <button onclick="skipBuy()">Skip</button>
+  </div>
+</div>
 
-<div id="card" class="overlay"><div class="popup">
-<b id="cardTitle"></b><br><br>
-<div id="cardText"></div><br>
-<button onclick="closeCard()">OK</button>
-</div></div>
+<!-- CARD POPUP -->
+<div id="cardOverlay" class="overlay">
+  <div class="popup">
+    <b id="cardTitle"></b><br><br>
+    <div id="cardText"></div><br>
+    <button onclick="closeCard()">OK</button>
+  </div>
+</div>
+
+<!-- INFO POPUP -->
+<div id="infoOverlay" class="overlay">
+  <div class="popup">
+    <span onclick="closeInfo()" style="float:right;cursor:pointer">✖</span>
+    <div id="infoText"></div>
+  </div>
+</div>
+
+<div style="text-align:center;margin-top:10px">
+  <button onclick="showInfo('chance')">Chance</button>
+  <button onclick="showInfo('community')">Community</button>
+</div>
 
 <script>
-const socket=io();
+const socket = io();
+let pendingBuyTile = null;
 
+/* BASIC ACTIONS */
 function join(){
- const n=playerName.value.trim();
- if(!n) return alert("Enter name");
- socket.emit("join",n);
+  const n = playerName.value.trim();
+  if(!n){ alert("Enter name"); return; }
+  socket.emit("join", n);
 }
-function roll(){socket.emit("roll")}
-function buy(){socket.emit("buy")}
-function closeCard(){socket.emit("closeCard")}
-function showInfo(t){
- infoText.innerHTML=t==="chance"
- ?"<b>Chance</b><br>Movement & money cards"
- :"<b>Community</b><br>Bank & fees";
- info.style.display="block";
-}
-function hideInfo(){info.style.display="none"}
+function roll(){ socket.emit("roll"); }
+function confirmBuy(){ socket.emit("buy"); hideBuy(); }
+function skipBuy(){ hideBuy(); }
+function closeCard(){ socket.emit("closeCard"); }
 
-socket.on("state",s=>{
- msg.innerText=s.message||"";
- board.innerHTML=""; buyArea.innerHTML="";
- s.board.forEach((t,i)=>{
-  const d=document.createElement("div"); d.className="tile";
-  if(t.color){const st=document.createElement("div");st.className="strip "+t.color;d.appendChild(st)}
-  d.innerHTML+=`<b>${t.name}</b>${t.price?`<br>₹${t.price}`:""}`;
-  if(t.owner) d.classList.add(t.owner===socket.id?"owned-me":"owned-other");
-  s.players.forEach(p=>{if(p.position===i){const tok=document.createElement("div");tok.className="token";tok.innerText=p.name[0];d.appendChild(tok)}})
-  board.appendChild(d);
- });
- if(s.awaitingBuy&&s.awaitingBuy.playerId===socket.id){
-  const t=s.board[s.awaitingBuy.tileIndex];
-  buyArea.innerHTML=`<button onclick="buy()">Buy ${t.name} (₹${t.price})</button>`;
- }
- if(s.cardPopup){
-  cardTitle.innerText=s.cardPopup.title;
-  cardText.innerText=s.cardPopup.text;
-  card.style.display="block";
- }else card.style.display="none";
+/* INFO POPUP */
+function showInfo(t){
+  infoText.innerHTML = t==="chance"
+    ? "<b>Chance</b><br>Movement & money cards"
+    : "<b>Community Chest</b><br>Bank rewards & fees";
+  infoOverlay.style.display="block";
+}
+function closeInfo(){ infoOverlay.style.display="none"; }
+
+/* BUY POPUP */
+function showBuy(tile){
+  buyTitle.innerText = tile.name;
+  buyPrice.innerText = "Price: ₹" + tile.price;
+  buyOverlay.style.display = "block";
+}
+function hideBuy(){
+  buyOverlay.style.display = "none";
+}
+
+/* STATE UPDATE */
+socket.on("state", s=>{
+  msg.innerText = s.message || "";
+
+  /* BOARD */
+  board.innerHTML = "";
+  s.board.forEach((t,i)=>{
+    const d = document.createElement("div");
+    d.className = "tile";
+
+    if(t.color){
+      const st = document.createElement("div");
+      st.className = "strip " + t.color;
+      d.appendChild(st);
+    }
+
+    d.innerHTML += `<b>${t.name}</b>${t.price?`<br>₹${t.price}`:""}`;
+
+    if(t.owner){
+      d.classList.add(t.owner===socket.id?"owned-me":"owned-other");
+    }
+
+    s.players.forEach(p=>{
+      if(p.position === i){
+        const tok = document.createElement("div");
+        tok.className = "token";
+        tok.innerText = p.name[0];
+        d.appendChild(tok);
+      }
+    });
+
+    board.appendChild(d);
+  });
+
+  /* PLAYER INFO */
+  players.innerHTML = "";
+  s.players.forEach(p=>{
+    players.innerHTML += `
+      <div class="playerBox">
+        <span class="${p.id===socket.id?'you':''}">
+          ${p.name} ${p.id===socket.id?'(YOU)':''}
+        </span><br>
+        💰 ₹${p.money} | 📍 ${p.position+1}
+      </div>
+    `;
+  });
+
+  /* BUY POPUP TRIGGER */
+  if(s.awaitingBuy && s.awaitingBuy.playerId === socket.id){
+    const tile = s.board[s.awaitingBuy.tileIndex];
+    showBuy(tile);
+  } else {
+    hideBuy();
+  }
+
+  /* CARD POPUP */
+  if(s.cardPopup){
+    cardTitle.innerText = s.cardPopup.title;
+    cardText.innerText = s.cardPopup.text;
+    cardOverlay.style.display = "block";
+  } else {
+    cardOverlay.style.display = "none";
+  }
 });
 </script>
 
