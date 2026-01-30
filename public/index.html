@@ -1,35 +1,99 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Delhi Monopoly</title>
-  <script src="/socket.io/socket.io.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Delhi Monopoly</title>
+<script src="/socket.io/socket.io.js"></script>
 
-  <style>
-    body { font-family: Arial; background:#f2f2f2; padding:10px }
-    #board { display:grid; grid-template-columns:repeat(4,1fr); gap:8px }
-    .tile { background:#fff; padding:6px; border-radius:8px; min-height:90px }
+<style>
+body{
+  font-family:Arial;
+  background:#f2f2f2;
+  margin:0;
+  padding:10px;
+}
 
-    #controls { text-align:center; margin-bottom:10px }
-    button { padding:6px 10px; margin:5px }
+#controls{text-align:center;margin-bottom:10px}
+button{padding:6px 12px;margin:4px}
 
-    /* INFO POPUP */
-    .infoPopup {
-      position:fixed;
-      inset:0;
-      background:rgba(0,0,0,.5);
-      display:none;
-    }
-    .infoBox {
-      background:#fefefe;
-      border:2px solid #333;
-      padding:15px;
-      width:85%;
-      margin:25% auto;
-      border-radius:8px;
-    }
-    .close { float:right; cursor:pointer; font-weight:bold }
-  </style>
+#message{text-align:center;font-weight:bold;margin-bottom:8px}
+
+#board{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+}
+
+.tile{
+  background:#fff;
+  border-radius:10px;
+  min-height:95px;
+  padding:6px;
+  position:relative;
+  font-size:13px;
+}
+
+.strip{
+  height:6px;
+  border-radius:6px 6px 0 0;
+  margin:-6px -6px 4px -6px;
+}
+
+.brown{background:#8d6e63}
+.lightblue{background:#81d4fa}
+.pink{background:#f48fb1}
+.orange{background:#ffb74d}
+.red{background:#e57373}
+.yellow{background:#fff176}
+.green{background:#81c784}
+.blue{background:#64b5f6}
+
+.owned-me{border:3px solid #2ecc71}
+.owned-other{border:3px solid #e74c3c}
+
+.token{
+  position:absolute;
+  bottom:4px;
+  right:4px;
+  font-size:12px;
+  background:#000;
+  color:#fff;
+  padding:2px 6px;
+  border-radius:12px;
+}
+
+#players{
+  margin-top:10px;
+}
+
+.playerBox{
+  background:#fff;
+  border-radius:8px;
+  padding:6px;
+  margin-bottom:6px;
+}
+
+.you{color:#0077ff;font-weight:bold}
+
+/* POPUPS */
+.overlay{
+  position:fixed;
+  inset:0;
+  background:rgba(0,0,0,.5);
+  display:none;
+}
+
+.popup{
+  background:#fafafa;
+  border:2px solid #333;
+  padding:15px;
+  border-radius:8px;
+  width:85%;
+  margin:25% auto;
+}
+
+.close{float:right;cursor:pointer;font-weight:bold}
+</style>
 </head>
 
 <body>
@@ -37,31 +101,34 @@
 <h2>Delhi Monopoly</h2>
 
 <div id="controls">
-  <input id="playerName" placeholder="Name">
+  <input id="name" placeholder="Name">
   <button onclick="join()">Join</button>
   <button onclick="roll()">🎲 Roll</button>
 </div>
 
-<div id="msg"></div>
+<div id="message"></div>
+
 <div id="board"></div>
 
-<!-- INFO BUTTONS -->
+<div id="players"></div>
+
+<!-- Bottom info buttons -->
 <div style="text-align:center;margin-top:10px">
   <button onclick="showChanceInfo()">Chance</button>
   <button onclick="showCommunityInfo()">Community</button>
 </div>
 
-<!-- INFO POPUP -->
-<div id="infoPopup" class="infoPopup">
-  <div class="infoBox">
+<!-- Info popup -->
+<div id="infoOverlay" class="overlay">
+  <div class="popup">
     <span class="close" onclick="closeInfo()">✖</span>
     <div id="infoText"></div>
   </div>
 </div>
 
-<!-- CARD POPUP -->
-<div id="cardPopup" class="infoPopup">
-  <div class="infoBox">
+<!-- Card popup -->
+<div id="cardOverlay" class="overlay">
+  <div class="popup">
     <b id="cardTitle"></b><br><br>
     <div id="cardText"></div><br>
     <button onclick="closeCard()">OK</button>
@@ -70,47 +137,78 @@
 
 <script>
 const socket = io();
+let myId = null;
 
-function join(){ socket.emit("join", playerName.value); }
-function roll(){ socket.emit("roll"); }
-function closeCard(){ socket.emit("closeCard"); }
+function join(){
+  socket.emit("join", name.value);
+}
+
+function roll(){
+  socket.emit("roll");
+}
+
+function closeCard(){
+  socket.emit("closeCard");
+}
 
 function showChanceInfo(){
   infoText.innerHTML = `
-    <b>Chance Cards</b><br>
-    • Advance to GO<br>
-    • Go to Jail<br>
-    • Receive money<br>
-    • Pay tax<br>
-    • Move across board`;
-  infoPopup.style.display="block";
+  <b>Chance Cards</b><br>
+  • Advance to GO<br>
+  • Go to Jail<br>
+  • Receive / Pay money<br>
+  • Move across board`;
+  infoOverlay.style.display="block";
 }
 
 function showCommunityInfo(){
   infoText.innerHTML = `
-    <b>Community Chest</b><br>
-    • Bank rewards<br>
-    • Fees & fines<br>
-    • Go to Jail<br>
-    • Player payments`;
-  infoPopup.style.display="block";
+  <b>Community Chest</b><br>
+  • Bank rewards<br>
+  • Fees & fines<br>
+  • Go to Jail<br>
+  • Player payments`;
+  infoOverlay.style.display="block";
 }
 
-function closeInfo(){ infoPopup.style.display="none"; }
+function closeInfo(){
+  infoOverlay.style.display="none";
+}
 
 socket.on("update", g=>{
-  msg.innerText = g.message||"";
-  board.innerHTML = "";
+  message.innerText = g.message || "";
+
+  board.innerHTML="";
   g.board.forEach(t=>{
-    board.innerHTML += `<div class="tile">${t.name}</div>`;
+    let cls="tile";
+    if(t.owner){
+      cls += (t.owner===myId) ? " owned-me" : " owned-other";
+    }
+    board.innerHTML += `
+      <div class="${cls}">
+        ${t.color ? `<div class="strip ${t.color}"></div>`:""}
+        <b>${t.name}</b>
+      </div>`;
   });
 
-  if (g.cardPopup) {
+  players.innerHTML="";
+  g.players.forEach(p=>{
+    if(!myId && p.id) myId = socket.id;
+    players.innerHTML += `
+      <div class="playerBox">
+        <span class="${p.id===socket.id?'you':''}">
+          ${p.name} ${p.id===socket.id?'(YOU)':''}
+        </span><br>
+        💰 ₹${p.money} | 📍 ${p.position}
+      </div>`;
+  });
+
+  if(g.cardPopup){
     cardTitle.innerText = g.cardPopup.title;
     cardText.innerText = g.cardPopup.text;
-    cardPopup.style.display="block";
-  } else {
-    cardPopup.style.display="none";
+    cardOverlay.style.display="block";
+  }else{
+    cardOverlay.style.display="none";
   }
 });
 </script>
