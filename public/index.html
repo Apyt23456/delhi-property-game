@@ -31,7 +31,7 @@
 
 <h2>Delhi Property Game</h2>
 
-<input id="name" placeholder="Name">
+<input id="playerName" placeholder="Name">
 <button onclick="join()">Join</button>
 <button onclick="roll()">🎲 Roll</button>
 
@@ -51,9 +51,26 @@
 const socket = io();
 let myId = null;
 
-socket.on("connect", () => myId = socket.id);
+const nameInput = document.getElementById("playerName");
+const board = document.getElementById("board");
+const players = document.getElementById("players");
+const msg = document.getElementById("msg");
+const popup = document.getElementById("popup");
+const popupText = document.getElementById("popupText");
 
-function join(){ socket.emit("join", name.value); }
+socket.on("connect", () => {
+  myId = socket.id;
+});
+
+function join(){
+  const playerName = nameInput.value.trim();
+  if (!playerName) {
+    alert("Please enter your name");
+    return;
+  }
+  socket.emit("join", playerName);
+}
+
 function roll(){ socket.emit("roll"); }
 function buy(){ socket.emit("buy"); }
 function skip(){ socket.emit("skip"); }
