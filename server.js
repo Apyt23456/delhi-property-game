@@ -10,7 +10,7 @@ app.use(express.static("public"));
 
 const JAIL_INDEX = 9;
 
-/* ===== BOARD (40 TILES) ===== */
+/* ===== BOARD (40 TILES, DELHI) ===== */
 const board = [
   {name:"GO", type:"go"},
 
@@ -76,19 +76,19 @@ let message = "";
 function ownsFullSet(pid, color){
   return board.filter(t => t.color === color).every(t => t.owner === pid);
 }
-
-function canBuildEvenly(pid, color, tileIndex){
+function canBuildEvenly(pid, color, idx){
   const group = board.filter(t => t.color === color && t.owner === pid);
-  const target = board[tileIndex];
   const min = Math.min(...group.map(t => t.houses));
-  return target.houses === min;
+  return board[idx].houses === min;
 }
-
 function emit(){
   io.emit("state",{board,players,turn,awaitingBuy,message});
 }
 
 io.on("connection", socket => {
+
+  /* 🔥 CRITICAL FIX: always send state on connect */
+  emit();
 
   socket.on("join", name => {
     if(!name || players.find(p=>p.id===socket.id)) return;
@@ -117,7 +117,7 @@ io.on("connection", socket => {
 
     if(tile.type === "gojail"){
       p.position = JAIL_INDEX;
-      turn = (turn+1) % players.length;
+      turn = (turn+1)%players.length;
       emit();
       return;
     }
@@ -128,7 +128,7 @@ io.on("connection", socket => {
       return;
     }
 
-    turn = (turn+1) % players.length;
+    turn = (turn+1)%players.length;
     emit();
   });
 
@@ -141,15 +141,14 @@ io.on("connection", socket => {
       p.money -= t.price;
       t.owner = p.id;
     }
-
     awaitingBuy = null;
-    turn = (turn+1) % players.length;
+    turn = (turn+1)%players.length;
     emit();
   });
 
   socket.on("skipBuy", ()=>{
     awaitingBuy = null;
-    turn = (turn+1) % players.length;
+    turn = (turn+1)%players.length;
     emit();
   });
 
@@ -170,4 +169,6 @@ io.on("connection", socket => {
   });
 });
 
-server.listen(process.env.PORT || 3000);
+server.listen(process.env.PORT || 3000, () =>
+  console.log("SERVER RUNNING")
+);
