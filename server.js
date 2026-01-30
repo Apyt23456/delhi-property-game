@@ -55,56 +55,81 @@ const board = [
 let players = [];
 let turnIndex = 0;
 let message = "";
+let awaitingBuy = null;
+
+function emit() {
+  io.emit("update", { board, players, turnIndex, message, awaitingBuy });
+}
 
 io.on("connection", socket => {
 
-  socket.emit("update", { board, players, turnIndex, message });
+  socket.emit("update", { board, players, turnIndex, message, awaitingBuy });
 
   socket.on("join", name => {
+    if (!name) return;
     players.push({
       id: socket.id,
       name,
       money: 1500,
       position: 1
     });
-    message = `${name} joined`;
-    io.emit("update", { board, players, turnIndex, message });
+    message = `${name} joined the game`;
+    emit();
   });
 
   socket.on("roll", () => {
     const p = players[turnIndex];
-    if (!p || p.id !== socket.id) return;
+    if (!p || p.id !== socket.id || awaitingBuy) return;
 
-    const dice = Math.floor(Math.random()*6)+1;
+    const dice = Math.floor(Math.random() * 6) + 1;
     p.position += dice;
+
     if (p.position > 40) {
       p.position -= 40;
       p.money += 200;
     }
 
-    const tile = board[p.position-1];
+    const tile = board[p.position - 1];
     message = `${p.name} rolled ${dice} → ${tile.name}`;
-    io.emit("update", { board, players, turnIndex, message });
+
+    if (tile.price && !tile.owner) {
+      awaitingBuy = p.id;
+    } else {
+      turnIndex = (turnIndex + 1) % players.length;
+    }
+
+    emit();
   });
 
   socket.on("buy", () => {
+    if (awaitingBuy !== socket.id) return;
+
     const p = players[turnIndex];
-    const tile = board[p.position-1];
+    const tile = board[p.position - 1];
 
-    if (!tile.price || tile.owner !== null) return;
-    if (p.money < tile.price) return;
+    if (p.money >= tile.price) {
+      p.money -= tile.price;
+      tile.owner = p.id;
+      message = `${p.name} bought ${tile.name}`;
+    }
 
-    tile.owner = p.id;
-    p.money -= tile.price;
-    message = `${p.name} bought ${tile.name}`;
+    awaitingBuy = null;
+    turnIndex = (turnIndex + 1) % players.length;
+    emit();
+  });
 
-    turnIndex = (turnIndex+1) % players.length;
-    io.emit("update", { board, players, turnIndex, message });
+  socket.on("skip", () => {
+    if (awaitingBuy !== socket.id) return;
+    awaitingBuy = null;
+    turnIndex = (turnIndex + 1) % players.length;
+    emit();
   });
 
   socket.on("disconnect", () => {
     players = players.filter(p => p.id !== socket.id);
-    io.emit("update", { board, players, turnIndex, message });
+    if (turnIndex >= players.length) turnIndex = 0;
+    awaitingBuy = null;
+    emit();
   });
 });
 
