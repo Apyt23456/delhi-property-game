@@ -8,7 +8,9 @@ const io = new Server(server);
 
 app.use(express.static("public"));
 
-/* ===== BOARD ===== */
+const JAIL_INDEX = 9;
+const GO_TO_JAIL_INDEX = 26;
+
 const board = [
   { name:"GO", type:"go" },
 
@@ -70,84 +72,91 @@ let turn = 0;
 let awaitingBuy = null;
 let message = "";
 
-function emit() {
-  io.emit("state",{board,players,turn,awaitingBuy,message});
+function ownsFullSet(pid, color) {
+  return board.filter(t => t.color === color).every(t => t.owner === pid);
 }
 
-function ownsFullSet(playerId, color){
-  return board.filter(t=>t.color===color).every(t=>t.owner===playerId);
+function emit() {
+  io.emit("state", { board, players, turn, awaitingBuy, message });
 }
 
 io.on("connection", socket => {
 
-  emit();
-
-  socket.on("join", name=>{
-    if(!name || players.find(p=>p.id===socket.id)) return;
+  socket.on("join", name => {
+    if (!name || players.find(p => p.id === socket.id)) return;
     players.push({
-      id:socket.id,
+      id: socket.id,
       name,
-      money:1500,
-      position:0,
-      lastDice:"-"
+      money: 1500,
+      position: 0,
+      lastDice: "-"
     });
     emit();
   });
 
-  socket.on("roll", ()=>{
+  socket.on("roll", () => {
     const p = players[turn];
-    if(!p || p.id!==socket.id || awaitingBuy) return;
+    if (!p || p.id !== socket.id || awaitingBuy) return;
 
-    const d1=Math.floor(Math.random()*6)+1;
-    const d2=Math.floor(Math.random()*6)+1;
+    const d1 = Math.floor(Math.random()*6)+1;
+    const d2 = Math.floor(Math.random()*6)+1;
     p.lastDice = `${d1}+${d2}`;
 
-    p.position=(p.position+d1+d2)%board.length;
-    const tile=board[p.position];
+    p.position = (p.position + d1 + d2) % board.length;
+    const tile = board[p.position];
 
-    message=`${p.name} rolled ${p.lastDice} → ${tile.name}`;
+    message = `${p.name} rolled ${p.lastDice} → ${tile.name}`;
 
-    if(tile.price && !tile.owner){
-      awaitingBuy={playerId:p.id,tileIndex:p.position};
-    } else {
-      turn=(turn+1)%players.length;
+    if (tile.type === "gojail") {
+      p.position = JAIL_INDEX;
+      message = `${p.name} sent to Jail`;
+      turn = (turn + 1) % players.length;
     }
-    emit();
-  });
-
-  socket.on("buy", ()=>{
-    if(!awaitingBuy) return;
-    const p=players.find(x=>x.id===awaitingBuy.playerId);
-    const t=board[awaitingBuy.tileIndex];
-    if(p.money>=t.price){
-      p.money-=t.price;
-      t.owner=p.id;
+    else if (tile.price && !tile.owner) {
+      awaitingBuy = { playerId: p.id, tileIndex: p.position };
     }
-    awaitingBuy=null;
-    turn=(turn+1)%players.length;
+    else {
+      turn = (turn + 1) % players.length;
+    }
+
     emit();
   });
 
-  socket.on("skipBuy", ()=>{
-    awaitingBuy=null;
-    turn=(turn+1)%players.length;
+  socket.on("buy", () => {
+    if (!awaitingBuy) return;
+    const p = players.find(x => x.id === awaitingBuy.playerId);
+    const t = board[awaitingBuy.tileIndex];
+
+    if (p.money >= t.price) {
+      p.money -= t.price;
+      t.owner = p.id;
+    }
+
+    awaitingBuy = null;
+    turn = (turn + 1) % players.length;
     emit();
   });
 
-  socket.on("buildHouse", idx=>{
-    const t=board[idx];
-    const p=players[turn];
-    if(!t || t.owner!==p.id) return;
-    if(!ownsFullSet(p.id,t.color)) return;
-    if(t.houses>=5) return;
+  socket.on("skipBuy", () => {
+    awaitingBuy = null;
+    turn = (turn + 1) % players.length;
+    emit();
+  });
 
-    const cost=Math.floor(t.price*0.5);
-    if(p.money<cost) return;
+  socket.on("buildHouse", idx => {
+    const p = players[turn];
+    const t = board[idx];
+    if (!t || t.owner !== p.id) return;
+    if (!ownsFullSet(p.id, t.color)) return;
+    if (t.houses >= 5) return;
 
-    p.money-=cost;
+    const cost = Math.floor(t.price * 0.5);
+    if (p.money < cost) return;
+
+    p.money -= cost;
     t.houses++;
     emit();
   });
 });
 
-server.listen(process.env.PORT||3000);
+server.listen(process.env.PORT || 3000);
