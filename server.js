@@ -14,24 +14,26 @@ const board = [
   { id:2, name:"Yamuna Vihar", price:100, owner:null },
   { id:3, name:"Shahdara", price:120, owner:null },
   { id:4, name:"Chance", type:"chance" },
-  { id:5, name:"Income Tax", type:"tax" },
-  { id:6, name:"Rajiv Chowk Metro", price:200, type:"metro", owner:null },
+  { id:5, name:"Income Tax", type:"tax", tax:200 },
+  { id:6, name:"Rajiv Chowk Metro", type:"metro", price:200, owner:null },
   { id:7, name:"Mayur Vihar", price:140, owner:null },
   { id:8, name:"Laxmi Nagar", price:160, owner:null },
   { id:9, name:"Preet Vihar", price:180, owner:null },
   { id:10, name:"Jail", type:"jail" },
+
   { id:11, name:"Lajpat Nagar", price:200, owner:null },
   { id:12, name:"Malviya Nagar", price:220, owner:null },
   { id:13, name:"Saket", price:240, owner:null },
-  { id:14, name:"Kashmere Gate Metro", price:200, type:"metro", owner:null },
+  { id:14, name:"Kashmere Gate Metro", type:"metro", price:200, owner:null },
   { id:15, name:"Rohini", price:260, owner:null },
   { id:16, name:"Pitampura", price:280, owner:null },
   { id:17, name:"Shalimar Bagh", price:300, owner:null },
   { id:18, name:"Free Parking", type:"free" },
   { id:19, name:"Karol Bagh", price:320, owner:null },
   { id:20, name:"Narela", price:340, owner:null },
+
   { id:21, name:"Punjabi Bagh", price:360, owner:null },
-  { id:22, name:"INA Metro", price:200, type:"metro", owner:null },
+  { id:22, name:"INA Metro", type:"metro", price:200, owner:null },
   { id:23, name:"Janakpuri", price:380, owner:null },
   { id:24, name:"Dwarka", price:400, owner:null },
   { id:25, name:"Uttam Nagar", price:420, owner:null },
@@ -39,14 +41,15 @@ const board = [
   { id:27, name:"Greater Kailash", price:450, owner:null },
   { id:28, name:"South Extension", price:470, owner:null },
   { id:29, name:"Defence Colony", price:500, owner:null },
-  { id:30, name:"Central Secretariat Metro", price:200, type:"metro", owner:null },
+  { id:30, name:"Central Secretariat Metro", type:"metro", price:200, owner:null },
+
   { id:31, name:"Chance", type:"chance" },
-  { id:32, name:"Luxury Tax", type:"tax" },
-  { id:33, name:"Property Tax", type:"tax" },
-  { id:34, name:"Lajpat Nagar Metro", price:200, type:"metro", owner:null },
+  { id:32, name:"Luxury Tax", type:"tax", tax:150 },
+  { id:33, name:"Property Tax", type:"tax", tax:150 },
+  { id:34, name:"Lajpat Nagar Metro", type:"metro", price:200, owner:null },
   { id:35, name:"Chance", type:"chance" },
-  { id:36, name:"Noida City Centre Metro", price:200, type:"metro", owner:null },
-  { id:37, name:"Wealth Tax", type:"tax" },
+  { id:36, name:"Noida City Centre Metro", type:"metro", price:200, owner:null },
+  { id:37, name:"Wealth Tax", type:"tax", tax:100 },
   { id:38, name:"Chanakyapuri", price:550, owner:null },
   { id:39, name:"Civil Lines", price:580, owner:null },
   { id:40, name:"India Gate", type:"GO" }
@@ -54,19 +57,24 @@ const board = [
 
 let players = [];
 let turnIndex = 0;
-let message = "";
 let awaitingBuy = null;
+let message = "";
+
+const rent = price => Math.floor(price * 0.1);
+
+function metroCount(ownerId) {
+  return board.filter(t => t.type === "metro" && t.owner === ownerId).length;
+}
 
 function emit() {
-  io.emit("update", { board, players, turnIndex, message, awaitingBuy });
+  io.emit("update", { board, players, turnIndex, awaitingBuy, message });
 }
 
 io.on("connection", socket => {
 
-  socket.emit("update", { board, players, turnIndex, message, awaitingBuy });
+  socket.emit("update", { board, players, turnIndex, awaitingBuy, message });
 
   socket.on("join", name => {
-    if (!name) return;
     players.push({
       id: socket.id,
       name,
@@ -92,6 +100,23 @@ io.on("connection", socket => {
     const tile = board[p.position - 1];
     message = `${p.name} rolled ${dice} → ${tile.name}`;
 
+    if (tile.type === "tax") {
+      p.money -= tile.tax;
+    }
+
+    if (tile.price && tile.owner && tile.owner !== p.id) {
+      if (tile.type === "metro") {
+        const count = metroCount(tile.owner);
+        const metroRent = [0,25,50,100,200][count];
+        p.money -= metroRent;
+        players.find(x => x.id === tile.owner).money += metroRent;
+      } else {
+        const r = rent(tile.price);
+        p.money -= r;
+        players.find(x => x.id === tile.owner).money += r;
+      }
+    }
+
     if (tile.price && !tile.owner) {
       awaitingBuy = p.id;
     } else {
@@ -103,7 +128,6 @@ io.on("connection", socket => {
 
   socket.on("buy", () => {
     if (awaitingBuy !== socket.id) return;
-
     const p = players[turnIndex];
     const tile = board[p.position - 1];
 
