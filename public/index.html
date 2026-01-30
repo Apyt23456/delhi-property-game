@@ -6,124 +6,29 @@
   <script src="/socket.io/socket.io.js"></script>
 
   <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
-      padding: 10px;
-    }
+    body { font-family: Arial; background:#f2f2f2; padding:10px }
+    #board { display:grid; grid-template-columns:repeat(4,1fr); gap:8px }
+    .tile { background:#fff; padding:6px; border-radius:8px; min-height:90px }
 
-    h2 {
-      text-align: center;
-      margin-bottom: 10px;
-    }
+    #controls { text-align:center; margin-bottom:10px }
+    button { padding:6px 10px; margin:5px }
 
-    #controls {
-      text-align: center;
-      margin-bottom: 10px;
+    /* INFO POPUP */
+    .infoPopup {
+      position:fixed;
+      inset:0;
+      background:rgba(0,0,0,.5);
+      display:none;
     }
-
-    input {
-      padding: 6px;
-      font-size: 14px;
+    .infoBox {
+      background:#fefefe;
+      border:2px solid #333;
+      padding:15px;
+      width:85%;
+      margin:25% auto;
+      border-radius:8px;
     }
-
-    button {
-      padding: 6px 10px;
-      margin-left: 4px;
-      font-size: 14px;
-    }
-
-    #msg {
-      text-align: center;
-      font-weight: bold;
-      margin: 10px 0;
-    }
-
-    #board {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-    }
-
-    .tile {
-      background: #fff;
-      border-radius: 8px;
-      padding: 6px;
-      min-height: 130px;
-      font-size: 13px;
-      position: relative;
-    }
-
-    .owned {
-      border: 3px solid #2ecc71;
-    }
-
-    /* ===== COLOR GROUP BAR ===== */
-    .color-bar {
-      height: 8px;
-      border-radius: 8px 8px 0 0;
-      margin: -6px -6px 6px -6px;
-    }
-
-    .color-brown { background: #8b4513; }
-    .color-lightblue { background: #87ceeb; }
-    .color-pink { background: #ff69b4; }
-    .color-orange { background: #ffa500; }
-    .color-red { background: #e74c3c; }
-    .color-yellow { background: #f1c40f; }
-    .color-green { background: #27ae60; }
-    .color-blue { background: #2980b9; }
-
-    /* ===== TOKENS ===== */
-    .token {
-      display: inline-block;
-      background: #3498db;
-      color: #fff;
-      padding: 2px 6px;
-      border-radius: 10px;
-      font-size: 12px;
-      margin: 2px 2px 0 0;
-    }
-
-    .owner-badge {
-      background: #2ecc71;
-    }
-
-    /* ===== HOUSES / HOTEL ===== */
-    .houses {
-      font-size: 14px;
-      margin: 2px 0;
-    }
-
-    /* ===== PLAYERS PANEL ===== */
-    #players {
-      margin-top: 15px;
-    }
-
-    .player {
-      background: #fff;
-      padding: 6px;
-      margin: 5px 0;
-      border-radius: 6px;
-      font-size: 14px;
-    }
-
-    /* ===== BUY POPUP ===== */
-    #popup {
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,0.5);
-      display: none;
-    }
-
-    #popupBox {
-      background: #fff;
-      padding: 15px;
-      width: 80%;
-      margin: 30% auto;
-      border-radius: 8px;
-      text-align: center;
-    }
+    .close { float:right; cursor:pointer; font-weight:bold }
   </style>
 </head>
 
@@ -132,119 +37,80 @@
 <h2>Delhi Monopoly</h2>
 
 <div id="controls">
-  <input id="playerName" placeholder="Your name">
+  <input id="playerName" placeholder="Name">
   <button onclick="join()">Join</button>
   <button onclick="roll()">🎲 Roll</button>
 </div>
 
 <div id="msg"></div>
-
 <div id="board"></div>
 
-<div id="players"></div>
+<!-- INFO BUTTONS -->
+<div style="text-align:center;margin-top:10px">
+  <button onclick="showChanceInfo()">Chance</button>
+  <button onclick="showCommunityInfo()">Community</button>
+</div>
 
-<!-- BUY POPUP -->
-<div id="popup">
-  <div id="popupBox">
-    <div id="popupText"></div><br>
-    <button onclick="buy()">Buy</button>
-    <button onclick="skip()">Skip</button>
+<!-- INFO POPUP -->
+<div id="infoPopup" class="infoPopup">
+  <div class="infoBox">
+    <span class="close" onclick="closeInfo()">✖</span>
+    <div id="infoText"></div>
+  </div>
+</div>
+
+<!-- CARD POPUP -->
+<div id="cardPopup" class="infoPopup">
+  <div class="infoBox">
+    <b id="cardTitle"></b><br><br>
+    <div id="cardText"></div><br>
+    <button onclick="closeCard()">OK</button>
   </div>
 </div>
 
 <script>
 const socket = io();
-let myId = null;
 
-const boardDiv = document.getElementById("board");
-const playersDiv = document.getElementById("players");
-const msgDiv = document.getElementById("msg");
-const popup = document.getElementById("popup");
-const popupText = document.getElementById("popupText");
+function join(){ socket.emit("join", playerName.value); }
+function roll(){ socket.emit("roll"); }
+function closeCard(){ socket.emit("closeCard"); }
 
-socket.on("connect", () => {
-  myId = socket.id;
-});
-
-/* ===== CONTROLS ===== */
-function join() {
-  const name = document.getElementById("playerName").value.trim();
-  if (!name) return alert("Enter your name");
-  socket.emit("join", name);
+function showChanceInfo(){
+  infoText.innerHTML = `
+    <b>Chance Cards</b><br>
+    • Advance to GO<br>
+    • Go to Jail<br>
+    • Receive money<br>
+    • Pay tax<br>
+    • Move across board`;
+  infoPopup.style.display="block";
 }
 
-function roll() {
-  socket.emit("roll");
+function showCommunityInfo(){
+  infoText.innerHTML = `
+    <b>Community Chest</b><br>
+    • Bank rewards<br>
+    • Fees & fines<br>
+    • Go to Jail<br>
+    • Player payments`;
+  infoPopup.style.display="block";
 }
 
-function buy() {
-  socket.emit("buy");
-}
+function closeInfo(){ infoPopup.style.display="none"; }
 
-function skip() {
-  socket.emit("skip");
-}
-
-/* ===== UPDATE HANDLER ===== */
-socket.on("update", g => {
-  msgDiv.innerText = g.message || "";
-
-  /* ===== BOARD ===== */
-  boardDiv.innerHTML = "";
-
-  g.board.forEach(t => {
-    const tokens = g.players
-      .filter(p => p.position === t.id)
-      .map(p => `<span class="token">${p.name[0]}</span>`)
-      .join("");
-
-    const ownerPlayer = g.players.find(p => p.id === t.owner);
-    const ownerBadge = ownerPlayer
-      ? `<span class="token owner-badge">${ownerPlayer.name[0]}</span>`
-      : "";
-
-    const houses = t.hotel
-      ? "🏨"
-      : t.houses ? "🏠".repeat(t.houses) : "";
-
-    const canBuild =
-      g.buildable?.find(b => b.id === t.id)?.canBuild &&
-      t.owner === myId &&
-      g.players[g.turnIndex]?.id === myId;
-
-    boardDiv.innerHTML += `
-      <div class="tile ${t.owner ? "owned" : ""}">
-        ${t.color ? `<div class="color-bar color-${t.color}"></div>` : ""}
-        <b>${t.name}</b><br>
-        ${t.price ? "₹" + t.price : ""}
-        <div class="houses">${houses}</div>
-        <div>${ownerBadge}</div>
-        <div>${tokens}</div>
-        ${canBuild ? `<button onclick="socket.emit('buildHouse', ${t.id})">Build</button>` : ""}
-      </div>
-    `;
+socket.on("update", g=>{
+  msg.innerText = g.message||"";
+  board.innerHTML = "";
+  g.board.forEach(t=>{
+    board.innerHTML += `<div class="tile">${t.name}</div>`;
   });
 
-  /* ===== PLAYERS PANEL ===== */
-  playersDiv.innerHTML = "<h3>Players</h3>";
-  g.players.forEach((p, i) => {
-    playersDiv.innerHTML += `
-      <div class="player">
-        ${p.name} | ₹${p.money}
-        ${p.jailTurns > 0 ? " 🚓 Jail" : ""}
-        ${i === g.turnIndex ? " ← Turn" : ""}
-      </div>
-    `;
-  });
-
-  /* ===== BUY POPUP ===== */
-  if (g.awaitingBuy === myId) {
-    const me = g.players[g.turnIndex];
-    const tile = g.board[me.position - 1];
-    popupText.innerText = `Buy ${tile.name} for ₹${tile.price}?`;
-    popup.style.display = "block";
+  if (g.cardPopup) {
+    cardTitle.innerText = g.cardPopup.title;
+    cardText.innerText = g.cardPopup.text;
+    cardPopup.style.display="block";
   } else {
-    popup.style.display = "none";
+    cardPopup.style.display="none";
   }
 });
 </script>
