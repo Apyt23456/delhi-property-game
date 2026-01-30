@@ -6,24 +6,19 @@
 
   <style>
     body { font-family: Arial; background:#f2f2f2; padding:10px }
-    h2 { text-align:center }
     #board { display:grid; grid-template-columns:repeat(4,1fr); gap:8px }
-    .tile { background:#fff; padding:6px; border-radius:8px; min-height:90px }
+    .tile { background:#fff; padding:6px; border-radius:8px; min-height:90px; position:relative }
     .owned { border:3px solid #2ecc71 }
-    .player { background:#fff; padding:6px; margin:5px 0; border-radius:6px }
-    #popup {
-      position:fixed; inset:0;
-      background:rgba(0,0,0,.5);
-      display:none;
+    .token {
+      font-size:12px;
+      padding:2px 5px;
+      border-radius:10px;
+      color:#fff;
+      margin:2px;
+      display:inline-block;
     }
-    #popupBox {
-      background:#fff;
-      padding:15px;
-      width:80%;
-      margin:30% auto;
-      border-radius:8px;
-      text-align:center;
-    }
+    #popup { position:fixed; inset:0; background:rgba(0,0,0,.5); display:none }
+    #popupBox { background:#fff; padding:15px; width:80%; margin:30% auto; border-radius:8px; text-align:center }
   </style>
 </head>
 
@@ -37,7 +32,6 @@
 
 <div id="msg"></div>
 <div id="board"></div>
-<div id="players"></div>
 
 <div id="popup">
   <div id="popupBox">
@@ -51,54 +45,35 @@
 const socket = io();
 let myId = null;
 
-const nameInput = document.getElementById("playerName");
-const board = document.getElementById("board");
-const players = document.getElementById("players");
-const msg = document.getElementById("msg");
-const popup = document.getElementById("popup");
-const popupText = document.getElementById("popupText");
-
-socket.on("connect", () => {
-  myId = socket.id;
-});
+socket.on("connect", () => myId = socket.id);
 
 function join(){
-  const playerName = nameInput.value.trim();
-  if (!playerName) {
-    alert("Please enter your name");
-    return;
-  }
-  socket.emit("join", playerName);
+  const name = playerName.value.trim();
+  if (!name) return alert("Enter name");
+  socket.emit("join", name);
 }
-
 function roll(){ socket.emit("roll"); }
 function buy(){ socket.emit("buy"); }
 function skip(){ socket.emit("skip"); }
 
 socket.on("update", g => {
   msg.innerText = g.message || "";
-
-  // BOARD
   board.innerHTML = "";
+
   g.board.forEach(t => {
+    let tokens = g.players
+      .filter(p => p.position === t.id)
+      .map(p => `<span class="token" style="background:#3498db">${p.name[0]}</span>`)
+      .join("");
+
     board.innerHTML += `
       <div class="tile ${t.owner ? "owned":""}">
         <b>${t.name}</b><br>
         ${t.price ? "₹"+t.price : ""}
+        <div>${tokens}</div>
       </div>`;
   });
 
-  // PLAYERS
-  players.innerHTML = "<h3>Players</h3>";
-  g.players.forEach((p,i)=>{
-    players.innerHTML += `
-      <div class="player">
-        ${p.name} | ₹${p.money} | Pos ${p.position}
-        ${i===g.turnIndex?" ← Turn":""}
-      </div>`;
-  });
-
-  // BUY POPUP
   if (g.awaitingBuy === myId) {
     const me = g.players[g.turnIndex];
     const tile = g.board[me.position - 1];
