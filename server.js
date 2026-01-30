@@ -8,7 +8,7 @@ const io = new Server(server);
 
 app.use(express.static("public"));
 
-/* ===== BOARD (DELHI MONOPOLY) ===== */
+/* ===== BOARD ===== */
 const board = [
   { name:"GO", type:"go" },
 
@@ -56,7 +56,7 @@ const board = [
 
   { name:"Central Secretariat Metro", type:"metro", price:200, owner:null },
 
-  { name:"Chance", type:"chance" },
+  { name:"Community Chest", type:"community" },
   { name:"Luxury Tax", type:"tax", amount:150 },
 
   { name:"Chanakyapuri", price:550, color:"blue", owner:null },
@@ -65,106 +65,142 @@ const board = [
   { name:"GO", type:"go" }
 ];
 
+/* ===== CARDS ===== */
+const chanceCards = [
+  p => ({ title:"Chance", text:"Advance to GO. Collect ₹200.", apply:()=>{p.position=0; p.money+=200;} }),
+  p => ({ title:"Chance", text:"Go to Jail.", apply:()=>{p.position=jailIndex(); p.jail=2;} }),
+  p => ({ title:"Chance", text:"Pay poor tax ₹50.", apply:()=>{p.money-=50;} }),
+  p => ({ title:"Chance", text:"Bank pays you ₹100.", apply:()=>{p.money+=100;} })
+];
+
+const communityCards = [
+  p => ({ title:"Community Chest", text:"Bank error in your favor. Collect ₹200.", apply:()=>{p.money+=200;} }),
+  p => ({ title:"Community Chest", text:"Doctor fee. Pay ₹50.", apply:()=>{p.money-=50;} }),
+  p => ({ title:"Community Chest", text:"Go to Jail.", apply:()=>{p.position=jailIndex(); p.jail=2;} })
+];
+
 let players = [];
-let turnIndex = 0;
+let turn = 0;
 let awaitingBuy = null;
+let cardPopup = null;
 let message = "";
 
-/* ===== HELPERS ===== */
-function emitState() {
-  io.emit("state", {
-    board,
-    players,
-    turnIndex,
-    awaitingBuy,
-    message
-  });
+function jailIndex(){
+  return board.findIndex(t=>t.type==="jail");
+}
+
+function metroCount(ownerId){
+  return board.filter(t=>t.type==="metro" && t.owner===ownerId).length;
+}
+
+function emit(){
+  io.emit("state",{board,players,turn,awaitingBuy,cardPopup,message});
 }
 
 io.on("connection", socket => {
 
-  emitState();
+  emit();
 
-  socket.on("join", name => {
-    if (!name || !name.trim()) return;
-
-    if (players.find(p => p.id === socket.id)) return;
-
+  socket.on("join", name=>{
+    if(!name || players.find(p=>p.id===socket.id)) return;
     players.push({
-      id: socket.id,
-      name: name.trim(),
-      money: 1500,
-      position: 0
+      id:socket.id,
+      name,
+      money:1500,
+      position:0,
+      jail:0,
+      doubles:0
     });
-
-    message = `${name} joined the game`;
-    emitState();
+    message = `${name} joined`;
+    emit();
   });
 
-  socket.on("roll", () => {
-    const p = players[turnIndex];
-    if (!p || p.id !== socket.id || awaitingBuy) return;
+  socket.on("roll", ()=>{
+    const p = players[turn];
+    if(!p || p.id!==socket.id || awaitingBuy || cardPopup) return;
 
-    const dice1 = Math.floor(Math.random() * 6) + 1;
-    const dice2 = Math.floor(Math.random() * 6) + 1;
-    const move = dice1 + dice2;
-
-    p.position += move;
-    if (p.position >= board.length) {
-      p.position -= board.length;
-      p.money += 200;
+    if(p.jail>0){
+      p.jail--;
+      message = `${p.name} is in Jail`;
+      turn=(turn+1)%players.length;
+      emit();
+      return;
     }
 
-    const tile = board[p.position];
-    message = `${p.name} rolled ${dice1}+${dice2} → ${tile.name}`;
+    const d1=Math.floor(Math.random()*6)+1;
+    const d2=Math.floor(Math.random()*6)+1;
+    const move=d1+d2;
 
-    if (tile.type === "tax") {
-      p.money -= tile.amount;
+    if(d1===d2) p.doubles++; else p.doubles=0;
+    if(p.doubles===3){
+      p.position=jailIndex();
+      p.jail=2;
+      p.doubles=0;
+      message=`${p.name} rolled 3 doubles → Jail`;
+      turn=(turn+1)%players.length;
+      emit();
+      return;
     }
 
-    if (tile.type === "gojail") {
-      p.position = board.findIndex(t => t.type === "jail");
+    p.position+=move;
+    if(p.position>=board.length){p.position-=board.length;p.money+=200;}
+
+    const tile=board[p.position];
+    message=`${p.name} rolled ${d1}+${d2} → ${tile.name}`;
+
+    if(tile.type==="tax") p.money-=tile.amount;
+
+    if(tile.type==="gojail"){
+      p.position=jailIndex();
+      p.jail=2;
     }
 
-    if (tile.price && !tile.owner) {
-      awaitingBuy = {
-        playerId: p.id,
-        tileIndex: p.position
-      };
-    } else {
-      awaitingBuy = null;
-      turnIndex = (turnIndex + 1) % players.length;
+    if(tile.type==="chance"){
+      const c=chanceCards[Math.floor(Math.random()*chanceCards.length)](p);
+      c.apply(); cardPopup=c;
     }
 
-    emitState();
+    if(tile.type==="community"){
+      const c=communityCards[Math.floor(Math.random()*communityCards.length)](p);
+      c.apply(); cardPopup=c;
+    }
+
+    if(tile.price && !tile.owner){
+      awaitingBuy={playerId:p.id,tileIndex:p.position};
+    }else if(tile.owner && tile.owner!==p.id){
+      let rent=0;
+      if(tile.type==="metro"){
+        rent=[0,25,50,100,200][metroCount(tile.owner)];
+      }else{
+        rent=Math.floor(tile.price*0.1);
+      }
+      p.money-=rent;
+      players.find(x=>x.id===tile.owner).money+=rent;
+    }else{
+      turn=(turn+1)%players.length;
+    }
+
+    emit();
   });
 
-  socket.on("buy", () => {
-    if (!awaitingBuy) return;
-
-    const { playerId, tileIndex } = awaitingBuy;
-    const p = players.find(x => x.id === playerId);
-    const tile = board[tileIndex];
-
-    if (p && tile && p.money >= tile.price && !tile.owner) {
-      p.money -= tile.price;
-      tile.owner = p.id;
-      message = `${p.name} bought ${tile.name}`;
+  socket.on("buy", ()=>{
+    if(!awaitingBuy) return;
+    const p=players.find(x=>x.id===awaitingBuy.playerId);
+    const t=board[awaitingBuy.tileIndex];
+    if(p && t && p.money>=t.price){
+      p.money-=t.price;
+      t.owner=p.id;
     }
-
-    awaitingBuy = null;
-    turnIndex = (turnIndex + 1) % players.length;
-    emitState();
+    awaitingBuy=null;
+    turn=(turn+1)%players.length;
+    emit();
   });
 
-  socket.on("disconnect", () => {
-    players = players.filter(p => p.id !== socket.id);
-    if (turnIndex >= players.length) turnIndex = 0;
-    awaitingBuy = null;
-    emitState();
+  socket.on("closeCard", ()=>{
+    cardPopup=null;
+    turn=(turn+1)%players.length;
+    emit();
   });
 });
 
-server.listen(process.env.PORT || 3000, () =>
-  console.log("Server running")
-);
+server.listen(process.env.PORT||3000);
