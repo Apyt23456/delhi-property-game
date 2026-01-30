@@ -23,6 +23,7 @@ width:16px;height:16px;border-radius:50%;font-size:11px;
 display:flex;align-items:center;justify-content:center}
 
 .house{font-size:14px;margin-top:4px}
+.you{font-weight:bold;color:#2980b9}
 </style>
 </head>
 
@@ -45,6 +46,7 @@ display:flex;align-items:center;justify-content:center}
 
 <script>
 const socket = io();
+let myId = null;
 
 function join(){ socket.emit("join", name.value); }
 function roll(){ socket.emit("roll"); }
@@ -52,7 +54,7 @@ function buy(){ socket.emit("buy"); }
 function skip(){ socket.emit("skipBuy"); }
 
 socket.on("state", s => {
-  if(!s.board) return;
+  myId = s.yourId || myId;
 
   msg.innerText = s.message || "";
   board.innerHTML = "";
@@ -60,29 +62,29 @@ socket.on("state", s => {
   buyModal.style.display = "none";
 
   s.board.forEach((t,i)=>{
-    const d = document.createElement("div");
-    d.className = "tile";
+    const d=document.createElement("div");
+    d.className="tile";
 
     if(t.color){
-      const st = document.createElement("div");
-      st.className = "strip " + t.color;
+      const st=document.createElement("div");
+      st.className="strip "+t.color;
       d.appendChild(st);
     }
 
     d.innerHTML += `<b>${t.name}</b>${t.price?`<br>₹${t.price}`:""}`;
 
     if(t.owner){
-      const o = s.players.find(p=>p.id===t.owner);
+      const o=s.players.find(p=>p.id===t.owner);
       if(o){
         const ot=document.createElement("div");
         ot.className="owner";
         ot.innerText=o.name[0];
         d.appendChild(ot);
       }
-      d.innerHTML += `<div class="house">${"🏠".repeat(t.houses||0)}</div>`;
+      d.innerHTML+=`<div class="house">${"🏠".repeat(t.houses||0)}</div>`;
     }
 
-    if(s.awaitingBuy && s.awaitingBuy.tileIndex===i && s.awaitingBuy.playerId===socket.id){
+    if(s.awaitingBuy && s.awaitingBuy.tileIndex===i && s.awaitingBuy.playerId===myId){
       buyModal.style.display="block";
     }
 
@@ -95,7 +97,7 @@ socket.on("state", s => {
       }
     });
 
-    if(t.owner===socket.id && t.color){
+    if(t.owner===myId && t.color){
       const btn=document.createElement("button");
       btn.innerText="🏠 Build";
       btn.onclick=e=>{e.stopPropagation();socket.emit("buildHouse",i)};
@@ -106,7 +108,10 @@ socket.on("state", s => {
   });
 
   s.players.forEach(p=>{
-    players.innerHTML += `${p.name}: ₹${p.money} | 🎲 ${p.lastDice}<br>`;
+    players.innerHTML += `
+      <div class="${p.id===myId?'you':''}">
+        ${p.name} : ₹${p.money} | 🎲 ${p.lastDice}
+      </div>`;
   });
 });
 </script>
