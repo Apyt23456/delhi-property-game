@@ -1,116 +1,170 @@
 const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+
 const app = express();
-const http = require("http").createServer(app);
-const io = require("socket.io")(http);
+const server = http.createServer(app);
+const io = new Server(server);
 
 app.use(express.static("public"));
 
-const PORT = process.env.PORT || 3000;
-
+/* ===== BOARD (DELHI MONOPOLY) ===== */
 const board = [
   { name:"GO", type:"go" },
-  { name:"Yamuna Vihar", price:100, color:"brown" },
-  { name:"Shahdara", price:120, color:"brown" },
+
+  { name:"Yamuna Vihar", price:100, color:"brown", owner:null },
+  { name:"Shahdara", price:120, color:"brown", owner:null },
+
   { name:"Chance", type:"chance" },
-  { name:"Income Tax", type:"tax", amount:100 },
-  { name:"Rajiv Chowk Metro", type:"metro" },
-  { name:"Mayur Vihar", price:140, color:"lightblue" },
-  { name:"Laxmi Nagar", price:160, color:"lightblue" },
-  { name:"Preet Vihar", price:180, color:"lightblue" },
+  { name:"Income Tax", type:"tax", amount:200 },
+
+  { name:"Rajiv Chowk Metro", type:"metro", price:200, owner:null },
+
+  { name:"Mayur Vihar", price:140, color:"lightblue", owner:null },
+  { name:"Laxmi Nagar", price:160, color:"lightblue", owner:null },
+  { name:"Preet Vihar", price:180, color:"lightblue", owner:null },
+
   { name:"Jail", type:"jail" },
 
-  { name:"Lajpat Nagar", price:200, color:"pink" },
-  { name:"Malviya Nagar", price:220, color:"pink" },
-  { name:"Saket", price:240, color:"pink" },
-  { name:"Kashmere Gate Metro", type:"metro" },
-  { name:"Rohini", price:260, color:"orange" },
-  { name:"Pitampura", price:280, color:"orange" },
-  { name:"Shalimar Bagh", price:300, color:"orange" },
+  { name:"Lajpat Nagar", price:200, color:"pink", owner:null },
+  { name:"Malviya Nagar", price:220, color:"pink", owner:null },
+  { name:"Saket", price:240, color:"pink", owner:null },
+
+  { name:"Kashmere Gate Metro", type:"metro", price:200, owner:null },
+
+  { name:"Rohini", price:260, color:"orange", owner:null },
+  { name:"Pitampura", price:280, color:"orange", owner:null },
+  { name:"Shalimar Bagh", price:300, color:"orange", owner:null },
+
   { name:"Free Parking", type:"free" },
 
-  { name:"Karol Bagh", price:320, color:"red" },
-  { name:"Narela", price:340, color:"red" },
-  { name:"Punjabi Bagh", price:360, color:"red" },
-  { name:"INA Metro", type:"metro" },
-  { name:"Janakpuri", price:380, color:"yellow" },
-  { name:"Dwarka", price:400, color:"yellow" },
-  { name:"Uttam Nagar", price:420, color:"yellow" },
+  { name:"Karol Bagh", price:320, color:"red", owner:null },
+  { name:"Narela", price:340, color:"red", owner:null },
+  { name:"Punjabi Bagh", price:360, color:"red", owner:null },
+
+  { name:"INA Metro", type:"metro", price:200, owner:null },
+
+  { name:"Janakpuri", price:380, color:"yellow", owner:null },
+  { name:"Dwarka", price:400, color:"yellow", owner:null },
+  { name:"Uttam Nagar", price:420, color:"yellow", owner:null },
+
   { name:"Go To Jail", type:"gojail" },
 
-  { name:"Greater Kailash", price:450, color:"green" },
-  { name:"South Extension", price:470, color:"green" },
-  { name:"Defence Colony", price:500, color:"green" },
-  { name:"Central Secretariat Metro", type:"metro" },
+  { name:"Greater Kailash", price:450, color:"green", owner:null },
+  { name:"South Extension", price:470, color:"green", owner:null },
+  { name:"Defence Colony", price:500, color:"green", owner:null },
+
+  { name:"Central Secretariat Metro", type:"metro", price:200, owner:null },
+
   { name:"Chance", type:"chance" },
   { name:"Luxury Tax", type:"tax", amount:150 },
-  { name:"Property Tax", type:"tax", amount:100 },
-  { name:"Lajpat Nagar Metro", type:"metro" },
-  { name:"Chance", type:"chance" },
-  { name:"Noida City Centre Metro", type:"metro" },
+
+  { name:"Chanakyapuri", price:550, color:"blue", owner:null },
+  { name:"Civil Lines", price:580, color:"blue", owner:null },
+
+  { name:"GO", type:"go" }
 ];
 
-let players = {};
-let currentTurn = null;
+let players = [];
+let turnIndex = 0;
+let awaitingBuy = null;
+let message = "";
+
+/* ===== HELPERS ===== */
+function emitState() {
+  io.emit("state", {
+    board,
+    players,
+    turnIndex,
+    awaitingBuy,
+    message
+  });
+}
 
 io.on("connection", socket => {
 
+  emitState();
+
   socket.on("join", name => {
-    if(players[socket.id]) return;
+    if (!name || !name.trim()) return;
 
-    players[socket.id] = {
+    if (players.find(p => p.id === socket.id)) return;
+
+    players.push({
       id: socket.id,
-      name,
-      pos: 0,
+      name: name.trim(),
       money: 1500,
-      properties: [],
-      houses:{}
-    };
+      position: 0
+    });
 
-    if(!currentTurn) currentTurn = socket.id;
-    io.emit("state", { players, board, currentTurn });
+    message = `${name} joined the game`;
+    emitState();
   });
 
   socket.on("roll", () => {
-    if(socket.id !== currentTurn) return;
+    const p = players[turnIndex];
+    if (!p || p.id !== socket.id || awaitingBuy) return;
 
-    const dice = Math.floor(Math.random()*6)+1;
-    const player = players[socket.id];
-    player.pos = (player.pos + dice) % board.length;
+    const dice1 = Math.floor(Math.random() * 6) + 1;
+    const dice2 = Math.floor(Math.random() * 6) + 1;
+    const move = dice1 + dice2;
 
-    const tile = board[player.pos];
-
-    if(tile.type === "gojail"){
-      player.pos = board.findIndex(t=>t.type==="jail");
+    p.position += move;
+    if (p.position >= board.length) {
+      p.position -= board.length;
+      p.money += 200;
     }
 
-    const ids = Object.keys(players);
-    currentTurn = ids[(ids.indexOf(socket.id)+1)%ids.length];
+    const tile = board[p.position];
+    message = `${p.name} rolled ${dice1}+${dice2} → ${tile.name}`;
 
-    io.emit("rolled", { name:player.name, dice, tile:tile.name });
-    io.emit("state", { players, board, currentTurn });
+    if (tile.type === "tax") {
+      p.money -= tile.amount;
+    }
+
+    if (tile.type === "gojail") {
+      p.position = board.findIndex(t => t.type === "jail");
+    }
+
+    if (tile.price && !tile.owner) {
+      awaitingBuy = {
+        playerId: p.id,
+        tileIndex: p.position
+      };
+    } else {
+      awaitingBuy = null;
+      turnIndex = (turnIndex + 1) % players.length;
+    }
+
+    emitState();
   });
 
-  socket.on("buy", index => {
-    const p = players[socket.id];
-    const tile = board[index];
-    if(!tile.price) return;
-    if(p.money < tile.price) return;
-    if(tile.owner) return;
+  socket.on("buy", () => {
+    if (!awaitingBuy) return;
 
-    p.money -= tile.price;
-    tile.owner = socket.id;
-    p.properties.push(index);
+    const { playerId, tileIndex } = awaitingBuy;
+    const p = players.find(x => x.id === playerId);
+    const tile = board[tileIndex];
 
-    io.emit("state", { players, board, currentTurn });
+    if (p && tile && p.money >= tile.price && !tile.owner) {
+      p.money -= tile.price;
+      tile.owner = p.id;
+      message = `${p.name} bought ${tile.name}`;
+    }
+
+    awaitingBuy = null;
+    turnIndex = (turnIndex + 1) % players.length;
+    emitState();
   });
 
   socket.on("disconnect", () => {
-    delete players[socket.id];
-    if(currentTurn === socket.id){
-      currentTurn = Object.keys(players)[0] || null;
-    }
-    io.emit("state", { players, board, currentTurn });
+    players = players.filter(p => p.id !== socket.id);
+    if (turnIndex >= players.length) turnIndex = 0;
+    awaitingBuy = null;
+    emitState();
   });
 });
 
-http.listen(PORT, () => console.log("Running on", PORT));
+server.listen(process.env.PORT || 3000, () =>
+  console.log("Server running")
+);
