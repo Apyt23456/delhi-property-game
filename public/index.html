@@ -10,8 +10,20 @@
     #board { display:grid; grid-template-columns:repeat(4,1fr); gap:8px }
     .tile { background:#fff; padding:6px; border-radius:8px; min-height:90px }
     .owned { border:3px solid #2ecc71 }
-    button { margin-top:4px }
     .player { background:#fff; padding:6px; margin:5px 0; border-radius:6px }
+    #popup {
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.5);
+      display:none;
+    }
+    #popupBox {
+      background:#fff;
+      padding:15px;
+      width:80%;
+      margin:30% auto;
+      border-radius:8px;
+      text-align:center;
+    }
   </style>
 </head>
 
@@ -27,38 +39,57 @@
 <div id="board"></div>
 <div id="players"></div>
 
+<div id="popup">
+  <div id="popupBox">
+    <div id="popupText"></div><br>
+    <button onclick="buy()">Buy</button>
+    <button onclick="skip()">Skip</button>
+  </div>
+</div>
+
 <script>
 const socket = io();
-const boardDiv = document.getElementById("board");
-const playersDiv = document.getElementById("players");
-const msg = document.getElementById("msg");
+let myId = null;
+
+socket.on("connect", () => myId = socket.id);
 
 function join(){ socket.emit("join", name.value); }
 function roll(){ socket.emit("roll"); }
 function buy(){ socket.emit("buy"); }
+function skip(){ socket.emit("skip"); }
 
 socket.on("update", g => {
   msg.innerText = g.message || "";
 
-  boardDiv.innerHTML = "";
-  g.board.forEach((t,i)=>{
-    boardDiv.innerHTML += `
+  // BOARD
+  board.innerHTML = "";
+  g.board.forEach(t => {
+    board.innerHTML += `
       <div class="tile ${t.owner ? "owned":""}">
         <b>${t.name}</b><br>
         ${t.price ? "₹"+t.price : ""}
-        ${t.price && !t.owner && g.players[g.turnIndex]?.id === socket.id
-          ? `<button onclick="buy()">Buy</button>` : ""}
       </div>`;
   });
 
-  playersDiv.innerHTML = "<h3>Players</h3>";
+  // PLAYERS
+  players.innerHTML = "<h3>Players</h3>";
   g.players.forEach((p,i)=>{
-    playersDiv.innerHTML += `
+    players.innerHTML += `
       <div class="player">
         ${p.name} | ₹${p.money} | Pos ${p.position}
         ${i===g.turnIndex?" ← Turn":""}
       </div>`;
   });
+
+  // BUY POPUP
+  if (g.awaitingBuy === myId) {
+    const me = g.players[g.turnIndex];
+    const tile = g.board[me.position - 1];
+    popupText.innerText = `Buy ${tile.name} for ₹${tile.price}?`;
+    popup.style.display = "block";
+  } else {
+    popup.style.display = "none";
+  }
 });
 </script>
 
