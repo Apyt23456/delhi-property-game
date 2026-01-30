@@ -1,141 +1,132 @@
-const express = require("express");
-const http = require("http");
-const { Server } = require("socket.io");
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delhi Monopoly</title>
+<script src="/socket.io/socket.io.js"></script>
 
-const app = express();
-const server = http.createServer(app);
-
-/* ✅ CORS ENABLED */
-const io = new Server(server, {
-  cors: { origin: "*", methods: ["GET","POST"] }
-});
-
-app.use(express.static("public"));
-
-/* ===== BOARD (SIMPLE, STABLE) ===== */
-const board = [
-  {name:"GO"},
-  {name:"Yamuna Vihar", price:100},
-  {name:"Shahdara", price:120},
-  {name:"Chance"},
-  {name:"Income Tax"},
-  {name:"Rajiv Chowk Metro", price:200},
-  {name:"Mayur Vihar", price:140},
-  {name:"Laxmi Nagar", price:160},
-  {name:"Preet Vihar", price:180},
-  {name:"Jail"},
-  {name:"Lajpat Nagar", price:200},
-  {name:"Malviya Nagar", price:220},
-  {name:"Saket", price:240},
-  {name:"Kashmere Gate Metro", price:200},
-  {name:"Rohini", price:260},
-  {name:"Pitampura", price:280},
-  {name:"Shalimar Bagh", price:300},
-  {name:"Free Parking"},
-  {name:"Karol Bagh", price:320},
-  {name:"Narela", price:340},
-  {name:"Punjabi Bagh", price:360},
-  {name:"INA Metro", price:200},
-  {name:"Janakpuri", price:380},
-  {name:"Dwarka", price:400},
-  {name:"Uttam Nagar", price:420},
-  {name:"Go To Jail"},
-  {name:"Greater Kailash", price:450},
-  {name:"South Extension", price:470},
-  {name:"Defence Colony", price:500},
-  {name:"Central Secretariat Metro", price:200},
-  {name:"Community Chest"},
-  {name:"Luxury Tax"},
-  {name:"Chanakyapuri", price:550},
-  {name:"Civil Lines", price:580},
-  {name:"GO"}
-];
-
-/* Ownership map */
-board.forEach(t => t.owner = null);
-
-let players = [];
-let turn = 0;
-let awaitingBuy = null;
-let message = "";
-
-/* ===== EMIT ===== */
-function emit(socket=null){
-  const state = { board, players, turn, awaitingBuy, message };
-  socket ? socket.emit("state", state) : io.emit("state", state);
+<style>
+body {
+  font-family: Arial;
+  background: #f2f2f2;
+  padding: 10px;
 }
 
-io.on("connection", socket => {
-  console.log("CONNECTED", socket.id);
+#board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
 
-  emit(socket); // ✅ send board immediately
+.tile {
+  background: #fff;
+  border-radius: 8px;
+  padding: 6px;
+  min-height: 80px;
+  position: relative;
+}
 
-  socket.on("join", name => {
-    if(!name || players.find(p=>p.id===socket.id)) return;
+.token {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #000;
+  color: #fff;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 
-    players.push({
-      id: socket.id,
-      name,
-      money: 1500,
-      position: 0,
-      lastDice: "-"
+#buyModal {
+  display: none;
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  background: #fff;
+  border: 2px solid #333;
+  padding: 10px;
+}
+</style>
+</head>
+
+<body>
+
+<h2>Delhi Monopoly (Restored)</h2>
+
+<input id="name" placeholder="Name">
+<button onclick="join()">Join</button>
+<button onclick="roll()">🎲 Roll</button>
+
+<p id="msg"></p>
+
+<div id="board"></div>
+<div id="players"></div>
+
+<div id="buyModal">
+  <button onclick="buy()">Buy</button>
+  <button onclick="skip()">Skip</button>
+</div>
+
+<script>
+const socket = io();
+
+function join() {
+  socket.emit("join", document.getElementById("name").value);
+}
+
+function roll() {
+  socket.emit("roll");
+}
+
+function buy() {
+  socket.emit("buy");
+}
+
+function skip() {
+  socket.emit("skipBuy");
+}
+
+socket.on("state", s => {
+  const boardDiv = document.getElementById("board");
+  const playersDiv = document.getElementById("players");
+  const msg = document.getElementById("msg");
+  const buyModal = document.getElementById("buyModal");
+
+  boardDiv.innerHTML = "";
+  playersDiv.innerHTML = "";
+  msg.innerText = s.message || "";
+  buyModal.style.display = "none";
+
+  s.board.forEach((tile, i) => {
+    const d = document.createElement("div");
+    d.className = "tile";
+    d.innerHTML = `<b>${tile.name}</b>${tile.price ? "<br>₹" + tile.price : ""}`;
+
+    s.players.forEach(p => {
+      if (p.position === i) {
+        const t = document.createElement("div");
+        t.className = "token";
+        t.innerText = p.name[0];
+        d.appendChild(t);
+      }
     });
 
-    message = `${name} joined`;
-    emit();
+    boardDiv.appendChild(d);
   });
 
-  socket.on("roll", () => {
-    const p = players[turn];
-    if(!p || p.id !== socket.id || awaitingBuy) return;
+  if (s.awaitingBuy && s.awaitingBuy.playerId === socket.id) {
+    buyModal.style.display = "block";
+  }
 
-    const d = Math.floor(Math.random()*6)+1;
-    p.lastDice = d;
-    p.position = (p.position + d) % board.length;
-
-    const tile = board[p.position];
-    message = `${p.name} rolled ${d} → ${tile.name}`;
-
-    if(tile.price && !tile.owner){
-      awaitingBuy = { playerId: p.id, tileIndex: p.position };
-      emit();
-      return;
-    }
-
-    turn = (turn+1) % players.length;
-    emit();
-  });
-
-  socket.on("buy", () => {
-    if(!awaitingBuy) return;
-
-    const p = players.find(x=>x.id===awaitingBuy.playerId);
-    const t = board[awaitingBuy.tileIndex];
-
-    if(p.money >= t.price){
-      p.money -= t.price;
-      t.owner = p.id;
-      message = `${p.name} bought ${t.name}`;
-    }
-
-    awaitingBuy = null;
-    turn = (turn+1) % players.length;
-    emit();
-  });
-
-  socket.on("skipBuy", () => {
-    awaitingBuy = null;
-    turn = (turn+1) % players.length;
-    emit();
-  });
-
-  socket.on("disconnect", () => {
-    players = players.filter(p=>p.id!==socket.id);
-    if(turn >= players.length) turn = 0;
-    emit();
+  s.players.forEach(p => {
+    playersDiv.innerHTML += `${p.name} — ₹${p.money} — 🎲 ${p.lastDice}<br>`;
   });
 });
+</script>
 
-server.listen(process.env.PORT || 3000, () =>
-  console.log("SERVER RUNNING")
-);
+</body>
+</html>
