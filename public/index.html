@@ -1,24 +1,35 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width">
 <title>Delhi Monopoly</title>
 <script src="/socket.io/socket.io.js"></script>
 
 <style>
-body{font-family:Arial;background:#f2f2f2;padding:10px}
-#board{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-.tile{background:#fff;border-radius:10px;padding:8px;position:relative}
+body{font-family:Arial;background:#f4f4f4;padding:10px}
+#board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.tile{background:#fff;border-radius:8px;padding:6px;position:relative;min-height:80px}
 .color{height:6px;border-radius:6px 6px 0 0}
-.owner{position:absolute;top:5px;right:5px;background:#000;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;font-size:12px}
-.house{font-size:14px}
-#popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
-background:#fff;padding:20px;border:2px solid #333;border-radius:10px;display:none}
+.owner{position:absolute;top:6px;right:6px;background:#000;color:#fff;border-radius:50%;width:20px;height:20px;text-align:center;font-size:12px}
+.house{font-size:12px;color:green}
+
+#buyModal{
+  display:none;
+  position:fixed;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  background:#fff;
+  padding:15px;
+  border:2px solid #333;
+  border-radius:10px;
+  z-index:1000;
+}
 </style>
 </head>
 
 <body>
-<h1>Delhi Monopoly</h1>
+
+<h2>Delhi Monopoly</h2>
 
 <input id="name" placeholder="Name">
 <button onclick="join()">Join</button>
@@ -28,64 +39,81 @@ background:#fff;padding:20px;border:2px solid #333;border-radius:10px;display:no
 
 <div id="board"></div>
 
-<div id="popup">
-  <p id="popupText"></p>
+<div id="buyModal">
+  <p>Buy this property?</p>
   <button onclick="buy()">Buy</button>
-  <button onclick="skip()">Skip</button>
 </div>
 
 <script>
 const socket = io();
-let state;
+let state=null;
 
-function join(){ socket.emit("join", name.value); }
+const boardDiv=document.getElementById("board");
+const turnDiv=document.getElementById("turn");
+const modal=document.getElementById("buyModal");
+
+function join(){ socket.emit("join",name.value); }
 function roll(){ socket.emit("roll"); }
-function buy(){ socket.emit("buy"); closePopup(); }
-function skip(){ socket.emit("skipBuy"); closePopup(); }
+function buy(){ socket.emit("buy"); }
 
-function closePopup(){ popup.style.display="none"; }
-
-socket.on("state", s=>{
+socket.on("state",s=>{
   state=s;
   render();
 });
 
 function render(){
-  if(!state) return;
+  if(!state || state.players.length===0){
+    turnDiv.innerText="Waiting for players";
+    return;
+  }
 
-  turn.innerText = state.players[state.turn]?.name+"'s turn";
+  turnDiv.innerText = state.players[state.turn].name+"'s turn";
+  boardDiv.innerHTML="";
 
-  board.innerHTML="";
   state.board.forEach((t,i)=>{
     const d=document.createElement("div");
     d.className="tile";
+
     if(t.color){
       const c=document.createElement("div");
       c.className="color";
       c.style.background=t.color;
       d.appendChild(c);
     }
+
     d.innerHTML+=`<b>${t.name}</b><br>${t.price?"₹"+t.price:""}`;
 
     if(t.owner){
       const o=document.createElement("div");
       o.className="owner";
-      o.innerText=state.players.find(p=>p.id===t.owner)?.name[0];
+      const p=state.players.find(pl=>pl.id===t.owner);
+      o.innerText=p.name[0];
       d.appendChild(o);
     }
 
-    if(t.houses){
-      d.innerHTML+=`<div class="house">${"🏠".repeat(t.houses)}</div>`;
+    if(t.houses>0){
+      const h=document.createElement("div");
+      h.className="house";
+      h.innerText="🏠".repeat(t.houses);
+      d.appendChild(h);
     }
 
-    board.appendChild(d);
+    if(t.owner===socket.id && t.color){
+      const sameColor=state.board.filter(b=>b.color===t.color);
+      if(sameColor.every(b=>b.owner===socket.id)){
+        const btn=document.createElement("button");
+        btn.innerText="Build House";
+        btn.onclick=()=>socket.emit("buildHouse",i);
+        d.appendChild(btn);
+      }
+    }
+
+    boardDiv.appendChild(d);
   });
 
-  if(state.awaitingBuy){
-    popup.style.display="block";
-    popupText.innerText="Buy this property?";
-  }
+  modal.style.display = state.awaitingBuy ? "block" : "none";
 }
 </script>
+
 </body>
 </html>
