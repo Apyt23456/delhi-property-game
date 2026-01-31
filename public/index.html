@@ -56,8 +56,12 @@ socket.on("connect", () => {
 });
 
 function join(){
+  alert("JOIN BUTTON CLICKED");
   const n = name.value.trim();
-  if(!n){ alert("Enter name"); return; }
+  if(!n){
+    alert("Name empty");
+    return;
+  }
   socket.emit("join", n);
 }
 
