@@ -10,43 +10,19 @@ body{font-family:Arial;background:#f4f4f4;padding:10px}
 #board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
 .tile{background:#fff;border-radius:8px;padding:6px;position:relative;min-height:90px}
 .color{height:6px;border-radius:6px 6px 0 0}
-
-.owner{
-  position:absolute;top:6px;right:6px;
-  background:#000;color:#fff;border-radius:50%;
-  width:20px;height:20px;text-align:center;font-size:12px
-}
-
-.tokens{
-  position:absolute;bottom:4px;left:4px;
-  display:flex;gap:4px;flex-wrap:wrap
-}
-.token{
-  width:16px;height:16px;border-radius:50%;
-  background:#333;color:#fff;font-size:10px;
-  display:flex;align-items:center;justify-content:center
-}
-
+.owner{position:absolute;top:6px;right:6px;background:#000;color:#fff;border-radius:50%;width:20px;height:20px;text-align:center;font-size:12px}
+.tokens{position:absolute;bottom:4px;left:4px;display:flex;gap:4px}
+.token{width:16px;height:16px;border-radius:50%;background:#333;color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center}
 .house{font-size:12px;color:green}
-
-#players{
-  margin-top:10px
-}
-.playerBox{
-  background:#fff;border-radius:8px;
-  padding:6px;margin-bottom:6px;
-  box-shadow:0 1px 3px rgba(0,0,0,.2)
-}
+.playerBox{background:#fff;padding:6px;margin:6px 0;border-radius:8px}
 
 #buyModal{
   display:none;
   position:fixed;
   top:50%;left:50%;
   transform:translate(-50%,-50%);
-  background:#fff;
-  padding:15px;
-  border:2px solid #333;
-  border-radius:10px;
+  background:#fff;padding:15px;
+  border:2px solid #333;border-radius:10px;
   z-index:1000;
 }
 </style>
@@ -63,7 +39,6 @@ body{font-family:Arial;background:#f4f4f4;padding:10px}
 <h3 id="turn">Waiting for players…</h3>
 
 <div id="board"></div>
-
 <div id="players"></div>
 
 <div id="buyModal">
@@ -72,7 +47,6 @@ body{font-family:Arial;background:#f4f4f4;padding:10px}
 </div>
 
 <script>
-/* ========= SOCKET ========= */
 const socket = io();
 let myId = null;
 let state = null;
@@ -81,50 +55,42 @@ socket.on("connect", () => {
   myId = socket.id;
 });
 
-/* ========= ACTIONS ========= */
 function join(){
   const n = name.value.trim();
   if(!n){ alert("Enter name"); return; }
   socket.emit("join", n);
 }
+
 function roll(){
-  if(!state || !state.players.some(p=>p.id===myId)){
-    alert("Join game first");
+  if(!state || !state.players.some(p => p.id === myId)){
+    alert("Join first");
     return;
   }
   socket.emit("roll");
 }
+
 function buy(){
   socket.emit("buy");
 }
 
-/* ========= STATE ========= */
-socket.on("state", s=>{
+socket.on("state", s => {
   state = s;
   render();
 });
 
-/* ========= RENDER ========= */
 function render(){
-  const boardDiv = document.getElementById("board");
-  const turnDiv  = document.getElementById("turn");
-  const modal    = document.getElementById("buyModal");
-  const buyText  = document.getElementById("buyText");
-  const playersDiv = document.getElementById("players");
-
-  if(!state || state.players.length===0){
-    turnDiv.innerText="Waiting for players…";
-    boardDiv.innerHTML="";
-    playersDiv.innerHTML="";
-    modal.style.display="none";
+  if(!state || state.players.length === 0){
+    turn.innerText = "Waiting for players…";
+    board.innerHTML = "";
+    players.innerHTML = "";
+    buyModal.style.display = "none";
     return;
   }
 
   const current = state.players[state.turn];
-  turnDiv.innerText = current ? current.name+"'s turn" : "Waiting…";
+  turn.innerText = current ? current.name + "'s turn" : "Waiting…";
 
-  /* BOARD */
-  boardDiv.innerHTML="";
+  board.innerHTML = "";
   state.board.forEach((t,i)=>{
     const d=document.createElement("div");
     d.className="tile";
@@ -138,16 +104,14 @@ function render(){
 
     d.innerHTML+=`<b>${t.name}</b><br>${t.price?"₹"+t.price:""}`;
 
-    /* owner badge */
     if(t.owner){
       const o=document.createElement("div");
       o.className="owner";
-      const p=state.players.find(pl=>pl.id===t.owner);
-      o.innerText=p ? p.name[0] : "?";
+      const p=state.players.find(x=>x.id===t.owner);
+      o.innerText=p?p.name[0]:"?";
       d.appendChild(o);
     }
 
-    /* houses */
     if(t.houses>0){
       const h=document.createElement("div");
       h.className="house";
@@ -155,23 +119,21 @@ function render(){
       d.appendChild(h);
     }
 
-    /* tokens */
-    const tokenBox=document.createElement("div");
-    tokenBox.className="tokens";
+    const tokBox=document.createElement("div");
+    tokBox.className="tokens";
     state.players.forEach(p=>{
       if(p.pos===i){
         const tok=document.createElement("div");
         tok.className="token";
         tok.innerText=p.name[0];
-        tokenBox.appendChild(tok);
+        tokBox.appendChild(tok);
       }
     });
-    d.appendChild(tokenBox);
+    d.appendChild(tokBox);
 
-    /* build house button */
     if(t.owner===myId && t.color){
-      const sameColor=state.board.filter(b=>b.color===t.color);
-      if(sameColor.length>0 && sameColor.every(b=>b.owner===myId)){
+      const same=state.board.filter(b=>b.color===t.color);
+      if(same.every(b=>b.owner===myId)){
         const btn=document.createElement("button");
         btn.innerText="Build House";
         btn.onclick=()=>socket.emit("buildHouse",i);
@@ -179,30 +141,23 @@ function render(){
       }
     }
 
-    boardDiv.appendChild(d);
+    board.appendChild(d);
   });
 
-  /* PLAYERS INFO BOX */
-  playersDiv.innerHTML="";
+  players.innerHTML="";
   state.players.forEach((p,idx)=>{
     const box=document.createElement("div");
     box.className="playerBox";
-    box.innerHTML=`
-      <b>${p.name}</b><br>
-      💰 ₹${p.money}<br>
-      📍 Tile ${p.pos}<br>
-      ${idx===state.turn?"➡️ Turn":""}
-    `;
-    playersDiv.appendChild(box);
+    box.innerHTML=`<b>${p.name}</b><br>₹${p.money} ${idx===state.turn?"➡️":""}`;
+    players.appendChild(box);
   });
 
-  /* BUY POPUP TEXT */
-  if(state.awaitingBuy){
+  if(state.awaitingBuy && state.awaitingBuy.playerId===myId){
     const tile=state.board[state.awaitingBuy.tileIndex];
     buyText.innerHTML=`Buy <b>${tile.name}</b> for ₹${tile.price}?`;
-    modal.style.display="block";
+    buyModal.style.display="block";
   }else{
-    modal.style.display="none";
+    buyModal.style.display="none";
   }
 }
 </script>
