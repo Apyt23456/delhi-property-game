@@ -8,14 +8,35 @@
 <style>
 body{font-family:Arial;background:#f4f4f4;padding:10px}
 #board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.tile{background:#fff;border-radius:8px;padding:6px;position:relative;min-height:80px}
+.tile{background:#fff;border-radius:8px;padding:6px;position:relative;min-height:90px}
 .color{height:6px;border-radius:6px 6px 0 0}
+
 .owner{
   position:absolute;top:6px;right:6px;
   background:#000;color:#fff;border-radius:50%;
   width:20px;height:20px;text-align:center;font-size:12px
 }
+
+.tokens{
+  position:absolute;bottom:4px;left:4px;
+  display:flex;gap:4px;flex-wrap:wrap
+}
+.token{
+  width:16px;height:16px;border-radius:50%;
+  background:#333;color:#fff;font-size:10px;
+  display:flex;align-items:center;justify-content:center
+}
+
 .house{font-size:12px;color:green}
+
+#players{
+  margin-top:10px
+}
+.playerBox{
+  background:#fff;border-radius:8px;
+  padding:6px;margin-bottom:6px;
+  box-shadow:0 1px 3px rgba(0,0,0,.2)
+}
 
 #buyModal{
   display:none;
@@ -43,13 +64,15 @@ body{font-family:Arial;background:#f4f4f4;padding:10px}
 
 <div id="board"></div>
 
+<div id="players"></div>
+
 <div id="buyModal">
-  <p>Buy this property?</p>
+  <p id="buyText"></p>
   <button onclick="buy()">Buy</button>
 </div>
 
 <script>
-/* ========= SOCKET SETUP (FIXED) ========= */
+/* ========= SOCKET ========= */
 const socket = io();
 let myId = null;
 let state = null;
@@ -60,28 +83,23 @@ socket.on("connect", () => {
 
 /* ========= ACTIONS ========= */
 function join(){
-  const n = document.getElementById("name").value.trim();
-  if(!n){
-    alert("Enter name");
-    return;
-  }
+  const n = name.value.trim();
+  if(!n){ alert("Enter name"); return; }
   socket.emit("join", n);
 }
-
 function roll(){
-  if(!state || !state.players || !state.players.some(p => p.id === myId)){
+  if(!state || !state.players.some(p=>p.id===myId)){
     alert("Join game first");
     return;
   }
   socket.emit("roll");
 }
-
 function buy(){
   socket.emit("buy");
 }
 
-/* ========= STATE LISTENER ========= */
-socket.on("state", s => {
+/* ========= STATE ========= */
+socket.on("state", s=>{
   state = s;
   render();
 });
@@ -91,61 +109,72 @@ function render(){
   const boardDiv = document.getElementById("board");
   const turnDiv  = document.getElementById("turn");
   const modal    = document.getElementById("buyModal");
+  const buyText  = document.getElementById("buyText");
+  const playersDiv = document.getElementById("players");
 
-  // No players yet
-  if(!state || !state.players || state.players.length === 0){
-    turnDiv.innerText = "Waiting for players…";
-    boardDiv.innerHTML = "";
-    modal.style.display = "none";
+  if(!state || state.players.length===0){
+    turnDiv.innerText="Waiting for players…";
+    boardDiv.innerHTML="";
+    playersDiv.innerHTML="";
+    modal.style.display="none";
     return;
   }
 
-  // Safe turn text (NO null)
   const current = state.players[state.turn];
-  turnDiv.innerText = current ? current.name + "'s turn" : "Waiting for turn…";
+  turnDiv.innerText = current ? current.name+"'s turn" : "Waiting…";
 
-  boardDiv.innerHTML = "";
-
+  /* BOARD */
+  boardDiv.innerHTML="";
   state.board.forEach((t,i)=>{
-    const d = document.createElement("div");
-    d.className = "tile";
+    const d=document.createElement("div");
+    d.className="tile";
 
     if(t.color){
-      const c = document.createElement("div");
-      c.className = "color";
-      c.style.background = t.color;
+      const c=document.createElement("div");
+      c.className="color";
+      c.style.background=t.color;
       d.appendChild(c);
     }
 
-    d.innerHTML += `<b>${t.name}</b><br>${t.price ? "₹"+t.price : ""}`;
+    d.innerHTML+=`<b>${t.name}</b><br>${t.price?"₹"+t.price:""}`;
 
-    // Owner badge
+    /* owner badge */
     if(t.owner){
-      const o = document.createElement("div");
-      o.className = "owner";
-      const p = state.players.find(pl => pl.id === t.owner);
-      o.innerText = p ? p.name[0] : "?";
+      const o=document.createElement("div");
+      o.className="owner";
+      const p=state.players.find(pl=>pl.id===t.owner);
+      o.innerText=p ? p.name[0] : "?";
       d.appendChild(o);
     }
 
-    // Houses
-    if(t.houses > 0){
-      const h = document.createElement("div");
-      h.className = "house";
-      h.innerText = "🏠".repeat(t.houses);
+    /* houses */
+    if(t.houses>0){
+      const h=document.createElement("div");
+      h.className="house";
+      h.innerText="🏠".repeat(t.houses);
       d.appendChild(h);
     }
 
-    // Build house button (unchanged logic)
-    if(
-      t.owner === myId &&
-      t.color
-    ){
-      const sameColor = state.board.filter(b => b.color === t.color);
-      if(sameColor.length > 0 && sameColor.every(b => b.owner === myId)){
-        const btn = document.createElement("button");
-        btn.innerText = "Build House";
-        btn.onclick = () => socket.emit("buildHouse", i);
+    /* tokens */
+    const tokenBox=document.createElement("div");
+    tokenBox.className="tokens";
+    state.players.forEach(p=>{
+      if(p.pos===i){
+        const tok=document.createElement("div");
+        tok.className="token";
+        tok.innerText=p.name[0];
+        tokenBox.appendChild(tok);
+      }
+    });
+    d.appendChild(tokenBox);
+
+    /* build house button */
+    if(t.owner===myId && t.color){
+      const sameColor=state.board.filter(b=>b.color===t.color);
+      if(sameColor.length>0 && sameColor.every(b=>b.owner===myId)){
+        const btn=document.createElement("button");
+        btn.innerText="Build House";
+        btn.onclick=()=>socket.emit("buildHouse",i);
         d.appendChild(btn);
       }
     }
@@ -153,8 +182,28 @@ function render(){
     boardDiv.appendChild(d);
   });
 
-  // Buy popup
-  modal.style.display = state.awaitingBuy ? "block" : "none";
+  /* PLAYERS INFO BOX */
+  playersDiv.innerHTML="";
+  state.players.forEach((p,idx)=>{
+    const box=document.createElement("div");
+    box.className="playerBox";
+    box.innerHTML=`
+      <b>${p.name}</b><br>
+      💰 ₹${p.money}<br>
+      📍 Tile ${p.pos}<br>
+      ${idx===state.turn?"➡️ Turn":""}
+    `;
+    playersDiv.appendChild(box);
+  });
+
+  /* BUY POPUP TEXT */
+  if(state.awaitingBuy){
+    const tile=state.board[state.awaitingBuy.tileIndex];
+    buyText.innerHTML=`Buy <b>${tile.name}</b> for ₹${tile.price}?`;
+    modal.style.display="block";
+  }else{
+    modal.style.display="none";
+  }
 }
 </script>
 
