@@ -11,29 +11,24 @@ app.use(express.static("public"));
 /* ================= BOARD (40 TILES) ================= */
 const board = [
   { name:"GO" },
-
   { name:"Yamuna Vihar", price:100, color:"brown" },
   { name:"Shahdara", price:120, color:"brown" },
   { name:"Chance" },
   { name:"Income Tax" },
-
   { name:"Rajiv Chowk Metro", price:200, type:"metro" },
   { name:"Mayur Vihar", price:140, color:"lightblue" },
   { name:"Laxmi Nagar", price:160, color:"lightblue" },
   { name:"Preet Vihar", price:180, color:"lightblue" },
-
   { name:"Jail" },
 
   { name:"Lajpat Nagar", price:200, color:"pink" },
   { name:"Malviya Nagar", price:220, color:"pink" },
   { name:"Saket", price:240, color:"pink" },
-
   { name:"Kashmere Gate Metro", price:200, type:"metro" },
 
   { name:"Rohini", price:260, color:"orange" },
   { name:"Pitampura", price:280, color:"orange" },
   { name:"Shalimar Bagh", price:300, color:"orange" },
-
   { name:"Free Parking" },
 
   { name:"Karol Bagh", price:320, color:"red" },
@@ -71,17 +66,18 @@ let turn = 0;
 let awaitingBuy = null;
 
 /* ================= HELPERS ================= */
-function getPlayer(socket, nameIfNew = "Player") {
-  let p = players.find(x => x.id === socket.id);
-  if (!p) {
-    p = {
-      id: socket.id,
-      name: nameIfNew,
-      money: 1500,
-      pos: 0
-    };
-    players.push(p);
-  }
+function getPlayerBySocket(socket) {
+  return players.find(p => p.id === socket.id);
+}
+
+function createPlayer(socket) {
+  const p = {
+    id: socket.id,
+    name: "Player",
+    money: 1500,
+    pos: 0
+  };
+  players.push(p);
   return p;
 }
 
@@ -98,23 +94,32 @@ function emitState() {
 /* ================= SOCKET ================= */
 io.on("connection", socket => {
 
-  // always send state on connect
+  // Always send state on connect
   socket.emit("state", { board, players, turn, awaitingBuy });
 
-  /* ---- JOIN (SAFE EVEN IF CLIENT IS BROKEN) ---- */
+  /* ---------- JOIN (NAME FIXED) ---------- */
   socket.on("join", name => {
-    const playerName =
-      typeof name === "string" && name.trim() ? name.trim() : "Player";
+    if (typeof name !== "string" || !name.trim()) return;
 
-    const p = getPlayer(socket, playerName);
-    p.name = playerName;
+    let p = getPlayerBySocket(socket);
+    if (!p) {
+      p = createPlayer(socket);
+    }
+
+    // ✅ Update name ONLY here
+    p.name = name.trim();
 
     emitState();
   });
 
-  /* ---- ROLL (AUTO-JOIN IF NEEDED) ---- */
+  /* ---------- ROLL (AUTO-CREATE IF NEEDED) ---------- */
   socket.on("roll", () => {
-    const p = getPlayer(socket);
+    let p = getPlayerBySocket(socket);
+    if (!p) {
+      p = createPlayer(socket);
+      emitState();
+      return;
+    }
 
     safeTurn();
     if (players[turn].id !== socket.id) return;
@@ -157,13 +162,14 @@ io.on("connection", socket => {
     emitState();
   });
 
-  /* ---- BUY ---- */
+  /* ---------- BUY ---------- */
   socket.on("buy", () => {
     if (!awaitingBuy) return;
 
-    const p = getPlayer(socket);
-    const tile = board[awaitingBuy.tileIndex];
+    const p = getPlayerBySocket(socket);
+    if (!p) return;
 
+    const tile = board[awaitingBuy.tileIndex];
     if (!tile.owner && p.money >= tile.price) {
       p.money -= tile.price;
       tile.owner = p.id;
@@ -174,12 +180,12 @@ io.on("connection", socket => {
     emitState();
   });
 
-  /* ---- BUILD HOUSE ---- */
+  /* ---------- BUILD HOUSE ---------- */
   socket.on("buildHouse", idx => {
-    const p = getPlayer(socket);
+    const p = getPlayerBySocket(socket);
     const tile = board[idx];
 
-    if (!tile || tile.owner !== p.id || !tile.color) return;
+    if (!p || !tile || tile.owner !== p.id || !tile.color) return;
 
     const sameColor = board.filter(b => b.color === tile.color);
     if (!sameColor.every(b => b.owner === p.id)) return;
