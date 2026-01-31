@@ -54,7 +54,10 @@ const board = [
   { name:"Connaught Place", price:600, color:"blue" }
 ];
 
-board.forEach(t => { t.owner = null; t.houses = 0; });
+board.forEach(t => {
+  t.owner = null;
+  t.houses = 0;
+});
 
 let players = [];
 let turn = 0;
@@ -73,61 +76,50 @@ function emitState() {
 
 /* ===== SOCKET ===== */
 io.on("connection", socket => {
-  // Send current state immediately on connection
-socket.emit("state", {
-  board,
-  players,
-  turn,
-  awaitingBuy
-});
+
+  // send initial state
+  socket.emit("state", { board, players, turn, awaitingBuy });
+
   socket.on("join", name => {
     if (!name || !name.trim()) return;
 
-    // remove ghost of same socket (refresh)
     players = players.filter(p => p.id !== socket.id);
 
     players.push({
       id: socket.id,
       name: name.trim(),
       money: 1500,
-      pos: 0,
-      inJail: false
+      pos: 0
     });
 
-    safeTurn();
     emitState();
-    emitState(); // <-- ADD THIS LINE AGAIN
   });
 
   socket.on("roll", () => {
-    if (players.length === 0) return;
     safeTurn();
-
     const p = players[turn];
     if (!p || p.id !== socket.id) return;
 
-    const dice = Math.floor(Math.random()*6)+1 + Math.floor(Math.random()*6)+1;
-    p.pos = (p.pos + dice) % board.length;
+    const d1 = Math.floor(Math.random()*6) + 1;
+    const d2 = Math.floor(Math.random()*6) + 1;
+    const steps = d1 + d2;
+
+    p.pos = (p.pos + steps) % board.length;
     const tile = board[p.pos];
 
-    if (tile.name === "Go To Jail") {
-      p.pos = 9;
-      p.inJail = true;
-      turn++;
-      emitState();
-      return;
-    }
-
-    if (tile.price && !tile.owner && p.money >= tile.price) {
+    // BUY FLOW
+    if (tile.price && !tile.owner) {
       awaitingBuy = { tileIndex: p.pos, playerId: p.id };
       emitState();
       return;
     }
 
+    // RENT
     if (tile.owner && tile.owner !== p.id) {
       const owner = players.find(x => x.id === tile.owner);
       if (owner) {
-        let rent;
+        let rent = 0;
+
         if (tile.type === "metro") {
           const metros = board.filter(
             b => b.type === "metro" && b.owner === tile.owner
@@ -136,6 +128,7 @@ socket.emit("state", {
         } else {
           rent = Math.floor(tile.price * 0.1) * (1 + tile.houses);
         }
+
         p.money -= rent;
         owner.money += rent;
       }
@@ -162,13 +155,12 @@ socket.emit("state", {
   });
 
   socket.on("buildHouse", idx => {
-    safeTurn();
     const p = players[turn];
     const tile = board[idx];
     if (!p || tile.owner !== p.id || !tile.color) return;
 
-    const same = board.filter(b => b.color === tile.color);
-    if (!same.every(b => b.owner === p.id)) return;
+    const sameColor = board.filter(b => b.color === tile.color);
+    if (!sameColor.every(b => b.owner === p.id)) return;
 
     if (tile.houses < 4 && p.money >= 50) {
       p.money -= 50;
