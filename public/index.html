@@ -1,296 +1,91 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Delhi Monopoly</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Delhi Monopoly</title>
+<script src="/socket.io/socket.io.js"></script>
 
-  <script src="/socket.io/socket.io.js"></script>
-
-  <style>
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background: #f2f2f2;
-    }
-
-    h1 {
-      text-align: center;
-      margin: 10px 0;
-    }
-
-    #controls {
-      text-align: center;
-      margin-bottom: 10px;
-    }
-
-    input {
-      padding: 6px;
-      font-size: 14px;
-    }
-
-    button {
-      padding: 6px 12px;
-      font-size: 14px;
-      margin-left: 6px;
-      cursor: pointer;
-    }
-
-    #log {
-      text-align: center;
-      font-weight: bold;
-      margin: 6px;
-    }
-
-    #board {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 8px;
-      padding: 10px;
-    }
-
-    .tile {
-      background: #fff;
-      border-radius: 10px;
-      min-height: 90px;
-      padding: 6px;
-      position: relative;
-      box-shadow: 0 2px 5px rgba(0,0,0,0.15);
-      font-size: 13px;
-    }
-
-    .strip {
-      height: 6px;
-      border-radius: 6px 6px 0 0;
-      margin: -6px -6px 6px -6px;
-    }
-
-    .brown { background: #8b4513; }
-    .lightblue { background: #5bc0eb; }
-    .pink { background: #ff69b4; }
-    .orange { background: #ffa500; }
-    .red { background: #e74c3c; }
-    .yellow { background: #f1c40f; }
-    .green { background: #2ecc71; }
-    .blue { background: #3498db; }
-
-    .owner {
-      position: absolute;
-      top: 6px;
-      right: 6px;
-      background: #000;
-      color: #fff;
-      border-radius: 50%;
-      width: 22px;
-      height: 22px;
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    .tokens {
-      position: absolute;
-      bottom: 6px;
-      left: 6px;
-      display: flex;
-      gap: 4px;
-    }
-
-    .token {
-      width: 16px;
-      height: 16px;
-      border-radius: 50%;
-      font-size: 10px;
-      color: #fff;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-
-    #players {
-      padding: 10px;
-    }
-
-    .playerBox {
-      background: #fff;
-      padding: 8px;
-      margin-bottom: 6px;
-      border-radius: 8px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.15);
-    }
-
-    /* BUY POPUP */
-    #buyModal {
-      display: none;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: #fff;
-      border: 2px solid #222;
-      padding: 16px 20px;
-      border-radius: 10px;
-      box-shadow: 0 8px 25px rgba(0,0,0,0.3);
-      z-index: 1000;
-      text-align: center;
-    }
-
-    #overlay {
-      display: none;
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      background: rgba(0,0,0,0.4);
-      z-index: 900;
-    }
-  </style>
+<style>
+body{font-family:Arial;background:#f2f2f2;padding:10px}
+#board{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+.tile{background:#fff;border-radius:10px;padding:8px;position:relative}
+.color{height:6px;border-radius:6px 6px 0 0}
+.owner{position:absolute;top:5px;right:5px;background:#000;color:#fff;border-radius:50%;width:22px;height:22px;text-align:center;font-size:12px}
+.house{font-size:14px}
+#popup{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+background:#fff;padding:20px;border:2px solid #333;border-radius:10px;display:none}
+</style>
 </head>
 
 <body>
-
 <h1>Delhi Monopoly</h1>
 
-<div id="controls">
-  <input id="nameInput" placeholder="Your name" />
-  <button onclick="join()">Join</button>
-  <button onclick="roll()">🎲 Roll</button>
-</div>
+<input id="name" placeholder="Name">
+<button onclick="join()">Join</button>
+<button onclick="roll()">🎲 Roll</button>
 
-<div id="log"></div>
+<h3 id="turn"></h3>
 
 <div id="board"></div>
 
-<div id="players"></div>
-
-<div id="overlay"></div>
-
-<div id="buyModal">
-  <div id="buyText"></div>
-  <br>
+<div id="popup">
+  <p id="popupText"></p>
   <button onclick="buy()">Buy</button>
-  <button onclick="skipBuy()">Skip</button>
+  <button onclick="skip()">Skip</button>
 </div>
 
 <script>
-  const socket = io();
+const socket = io();
+let state;
 
-  let myId = null;
+function join(){ socket.emit("join", name.value); }
+function roll(){ socket.emit("roll"); }
+function buy(){ socket.emit("buy"); closePopup(); }
+function skip(){ socket.emit("skipBuy"); closePopup(); }
 
-  function join() {
-    const name = document.getElementById("nameInput").value.trim();
-    if (!name) return alert("Enter name");
-    socket.emit("join", name);
-  }
+function closePopup(){ popup.style.display="none"; }
 
-  function roll() {
-    socket.emit("roll");
-  }
+socket.on("state", s=>{
+  state=s;
+  render();
+});
 
-  function buy() {
-    socket.emit("buy");
-    closeBuy();
-  }
+function render(){
+  if(!state) return;
 
-  function skipBuy() {
-    socket.emit("skipBuy");
-    closeBuy();
-  }
+  turn.innerText = state.players[state.turn]?.name+"'s turn";
 
-  function closeBuy() {
-    document.getElementById("buyModal").style.display = "none";
-    document.getElementById("overlay").style.display = "none";
-  }
+  board.innerHTML="";
+  state.board.forEach((t,i)=>{
+    const d=document.createElement("div");
+    d.className="tile";
+    if(t.color){
+      const c=document.createElement("div");
+      c.className="color";
+      c.style.background=t.color;
+      d.appendChild(c);
+    }
+    d.innerHTML+=`<b>${t.name}</b><br>${t.price?"₹"+t.price:""}`;
 
-  socket.on("connect", () => {
-    myId = socket.id;
+    if(t.owner){
+      const o=document.createElement("div");
+      o.className="owner";
+      o.innerText=state.players.find(p=>p.id===t.owner)?.name[0];
+      d.appendChild(o);
+    }
+
+    if(t.houses){
+      d.innerHTML+=`<div class="house">${"🏠".repeat(t.houses)}</div>`;
+    }
+
+    board.appendChild(d);
   });
 
-  socket.on("state", state => {
-    renderBoard(state);
-    renderPlayers(state);
-    handleBuy(state);
-  });
-
-  function renderBoard(state) {
-    const board = document.getElementById("board");
-    board.innerHTML = "";
-
-    state.board.forEach((tile, i) => {
-      const div = document.createElement("div");
-      div.className = "tile";
-
-      if (tile.color) {
-        const strip = document.createElement("div");
-        strip.className = "strip " + tile.color;
-        div.appendChild(strip);
-      }
-
-      div.innerHTML += `<b>${tile.name}</b><br>`;
-      if (tile.price) div.innerHTML += `₹${tile.price}`;
-
-      if (tile.owner) {
-        const owner = document.createElement("div");
-        owner.className = "owner";
-        owner.innerText = "O";
-        div.appendChild(owner);
-      }
-
-      const tokens = document.createElement("div");
-      tokens.className = "tokens";
-
-      state.players.forEach(p => {
-        if (p.position === i) {
-          const t = document.createElement("div");
-          t.className = "token";
-          t.style.background = "#000";
-          t.innerText = p.name[0].toUpperCase();
-          tokens.appendChild(t);
-        }
-      });
-
-      div.appendChild(tokens);
-      board.appendChild(div);
-    });
+  if(state.awaitingBuy){
+    popup.style.display="block";
+    popupText.innerText="Buy this property?";
   }
-
-  function renderPlayers(state) {
-    const box = document.getElementById("players");
-    box.innerHTML = "";
-
-    state.players.forEach((p, i) => {
-      const d = document.createElement("div");
-      d.className = "playerBox";
-      d.innerHTML = `
-        <b>${p.name}</b><br>
-        💰 ₹${p.money}<br>
-        📍 ${p.position}<br>
-        ${state.turn === i ? "➡️ Turn" : ""}
-      `;
-      box.appendChild(d);
-    });
-
-    if (state.players[state.turn]) {
-      document.getElementById("log").innerText =
-        `${state.players[state.turn].name}'s turn`;
-    }
-  }
-
-  function handleBuy(state) {
-    if (
-      state.awaitingBuy &&
-      state.awaitingBuy.playerId === myId
-    ) {
-      const tile = state.board[state.awaitingBuy.tileIndex];
-      document.getElementById("buyText").innerHTML =
-        `Buy <b>${tile.name}</b> for ₹${tile.price}?`;
-      document.getElementById("buyModal").style.display = "block";
-      document.getElementById("overlay").style.display = "block";
-    }
-  }
+}
 </script>
-
 </body>
 </html>
