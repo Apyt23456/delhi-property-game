@@ -90,6 +90,7 @@ io.on("connection", socket => {
 
     safeTurn();
     emitState();
+    emitState(); // <-- ADD THIS LINE AGAIN
   });
 
   socket.on("roll", () => {
