@@ -73,7 +73,13 @@ function emitState() {
 
 /* ===== SOCKET ===== */
 io.on("connection", socket => {
-
+  // Send current state immediately on connection
+socket.emit("state", {
+  board,
+  players,
+  turn,
+  awaitingBuy
+});
   socket.on("join", name => {
     if (!name || !name.trim()) return;
 
