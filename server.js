@@ -114,12 +114,8 @@ io.on("connection", socket => {
 
   /* ---------- ROLL (AUTO-CREATE IF NEEDED) ---------- */
   socket.on("roll", () => {
-    let p = getPlayerBySocket(socket);
-    if (!p) {
-      p = createPlayer(socket);
-      emitState();
-      return;
-    }
+  const p = getPlayerBySocket(socket);
+  if (!p) return; // 🚫 must JOIN before rolling
 
     safeTurn();
     if (players[turn].id !== socket.id) return;
