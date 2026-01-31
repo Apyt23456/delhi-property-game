@@ -1,79 +1,182 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width">
-<title>Delhi Monopoly</title>
-<script src="/socket.io/socket.io.js"></script>
+  <meta charset="UTF-8" />
+  <title>Delhi Monopoly</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="/socket.io/socket.io.js"></script>
 
-<style>
-body{font-family:Arial;background:#f4f4f4;padding:10px}
-#status{background:#222;color:#fff;padding:6px;border-radius:6px;margin-bottom:8px;font-size:13px}
-#board{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
-.tile{background:#fff;border-radius:8px;padding:6px;position:relative;min-height:90px}
-</style>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: #f4f4f4;
+      margin: 0;
+      padding: 12px;
+    }
+
+    h1 {
+      text-align: center;
+    }
+
+    #top {
+      display: flex;
+      gap: 6px;
+      justify-content: center;
+      margin-bottom: 10px;
+    }
+
+    input {
+      padding: 6px;
+      font-size: 14px;
+    }
+
+    button {
+      padding: 6px 10px;
+      font-size: 14px;
+      cursor: pointer;
+    }
+
+    #status {
+      text-align: center;
+      margin: 8px 0;
+      font-weight: bold;
+    }
+
+    #players {
+      background: #fff;
+      padding: 8px;
+      margin-bottom: 10px;
+      border-radius: 6px;
+    }
+
+    #board {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+
+    .tile {
+      background: #fff;
+      padding: 8px;
+      border-radius: 8px;
+      min-height: 70px;
+      font-size: 13px;
+      position: relative;
+    }
+
+    .owner {
+      position: absolute;
+      bottom: 4px;
+      right: 6px;
+      background: #000;
+      color: #fff;
+      font-size: 11px;
+      padding: 2px 6px;
+      border-radius: 10px;
+    }
+
+    #log {
+      margin-top: 10px;
+      background: #222;
+      color: #0f0;
+      padding: 6px;
+      font-size: 12px;
+      border-radius: 6px;
+    }
+  </style>
 </head>
 
 <body>
 
-<div id="status">Loading…</div>
+<h1>Delhi Monopoly</h1>
 
-<h2>Delhi Monopoly</h2>
+<div id="top">
+  <input id="nameInput" placeholder="Your name">
+  <button id="joinBtn">Join</button>
+  <button id="rollBtn">🎲 Roll</button>
+</div>
 
-<input id="name" placeholder="Name">
-<button onclick="join()">Join</button>
+<div id="status">Connecting...</div>
+
+<div id="players">No players yet</div>
 
 <div id="board"></div>
 
+<div id="log"></div>
+
 <script>
-/* 🔑 IMPORTANT FIX */
-const socket = io(window.location.origin);
+  const socket = io();
 
-let state = null;
+  const nameInput = document.getElementById("nameInput");
+  const joinBtn = document.getElementById("joinBtn");
+  const rollBtn = document.getElementById("rollBtn");
+  const boardDiv = document.getElementById("board");
+  const playersDiv = document.getElementById("players");
+  const statusDiv = document.getElementById("status");
+  const logDiv = document.getElementById("log");
 
-document.getElementById("status").innerText = "Connecting to server…";
+  let myId = null;
 
-socket.on("connect", () => {
-  document.getElementById("status").innerText = "Connected. Waiting to join.";
-});
+  // 🔴 JOIN FIX — STRING ONLY
+  joinBtn.onclick = () => {
+    const name = nameInput.value.trim();
+    if (!name) {
+      alert("Enter your name");
+      return;
+    }
+    socket.emit("join", name);
+  };
 
-socket.on("disconnect", () => {
-  document.getElementById("status").innerText = "Disconnected";
-});
+  rollBtn.onclick = () => {
+    socket.emit("roll");
+  };
 
-function join(){
-  alert("Join button clicked");
-  const n = name.value.trim();
-  if(!n){
-    document.getElementById("status").innerText = "Enter name first";
-    return;
-  }
-  socket.emit("join", n);
-  document.getElementById("status").innerText = "Join sent…";
-}
-
-socket.on("state", s => {
-  state = s;
-  document.getElementById("status").innerText =
-    "State received. Players: " + state.players.length;
-  render();
-});
-
-function render(){
-  const board = document.getElementById("board");
-  board.innerHTML = "";
-
-  if(!state || state.players.length === 0){
-    board.innerHTML = "<p>No players yet</p>";
-    return;
-  }
-
-  state.board.forEach(t=>{
-    const d = document.createElement("div");
-    d.className = "tile";
-    d.innerText = t.name;
-    board.appendChild(d);
+  socket.on("connect", () => {
+    myId = socket.id;
+    statusDiv.innerText = "Connected. Enter name & Join";
   });
-}
+
+  socket.on("state", state => {
+    console.log("STATE", state);
+    statusDiv.innerText = `Players: ${state.players.length}`;
+
+    // Players list
+    if (state.players.length === 0) {
+      playersDiv.innerText = "No players yet";
+    } else {
+      playersDiv.innerHTML = state.players.map((p, i) =>
+        `${i === state.turn ? "👉" : ""} ${p.name} ₹${p.money}`
+      ).join("<br>");
+    }
+
+    // Board
+    boardDiv.innerHTML = "";
+    state.board.forEach((t, i) => {
+      const div = document.createElement("div");
+      div.className = "tile";
+      div.innerHTML = `<b>${t.name}</b><br>${t.price ? "₹" + t.price : ""}`;
+
+      if (t.owner !== undefined && t.owner !== null) {
+        const owner = state.players[t.owner];
+        if (owner) {
+          const o = document.createElement("div");
+          o.className = "owner";
+          o.innerText = owner.name[0];
+          div.appendChild(o);
+        }
+      }
+
+      boardDiv.appendChild(div);
+    });
+  });
+
+  socket.on("message", msg => {
+    logDiv.innerText = msg;
+  });
+
+  socket.on("connect_error", () => {
+    statusDiv.innerText = "Connection error";
+  });
 </script>
 
 </body>
