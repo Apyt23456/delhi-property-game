@@ -8,167 +8,171 @@ const io = new Server(server, { cors: { origin: "*" } });
 
 app.use(express.static("public"));
 
-/* ---------- BOARD (40 TILES) ---------- */
+/* ========= 40 TILE BOARD ========= */
 const board = [
-  { name: "GO" },
-  { name: "Yamuna Vihar", price: 100, color: "brown", houses: 0 },
-  { name: "Shahdara", price: 120, color: "brown", houses: 0 },
-  { name: "Chance" },
-  { name: "Income Tax", tax: 100 },
-  { name: "Rajiv Chowk Metro", price: 200, type: "metro" },
-  { name: "Mayur Vihar", price: 140, color: "sky", houses: 0 },
-  { name: "Laxmi Nagar", price: 160, color: "sky", houses: 0 },
-  { name: "Preet Vihar", price: 180, color: "sky", houses: 0 },
-  { name: "Jail" },
+  { name:"GO" },
 
-  { name: "Lajpat Nagar", price: 200, color: "pink", houses: 0 },
-  { name: "Malviya Nagar", price: 220, color: "pink", houses: 0 },
-  { name: "Saket", price: 240, color: "pink", houses: 0 },
-  { name: "Kashmere Gate Metro", price: 200, type: "metro" },
-  { name: "Rohini", price: 260, color: "orange", houses: 0 },
-  { name: "Pitampura", price: 280, color: "orange", houses: 0 },
-  { name: "Shalimar Bagh", price: 300, color: "orange", houses: 0 },
-  { name: "Free Parking" },
+  { name:"Yamuna Vihar", price:100, color:"brown" },
+  { name:"Shahdara", price:120, color:"brown" },
+  { name:"Chance" },
+  { name:"Income Tax" },
 
-  { name: "Karol Bagh", price: 320, color: "red", houses: 0 },
-  { name: "Narela", price: 340, color: "red", houses: 0 },
-  { name: "Chance" },
-  { name: "Punjabi Bagh", price: 360, color: "yellow", houses: 0 },
-  { name: "INA Metro", price: 200, type: "metro" },
-  { name: "Janakpuri", price: 380, color: "yellow", houses: 0 },
-  { name: "Dwarka", price: 400, color: "yellow", houses: 0 },
+  { name:"Rajiv Chowk Metro", price:200, type:"metro" },
+  { name:"Mayur Vihar", price:140, color:"lightblue" },
+  { name:"Laxmi Nagar", price:160, color:"lightblue" },
+  { name:"Preet Vihar", price:180, color:"lightblue" },
 
-  { name: "Go To Jail" },
-  { name: "Greater Kailash", price: 450, color: "green", houses: 0 },
-  { name: "South Extension", price: 470, color: "green", houses: 0 },
-  { name: "Defence Colony", price: 500, color: "green", houses: 0 },
-  { name: "Central Secretariat Metro", price: 200, type: "metro" },
-  { name: "Chance" },
-  { name: "Civil Lines", price: 550, color: "blue", houses: 0 },
-  { name: "India Gate", price: 580, color: "blue", houses: 0 }
+  { name:"Jail" },
+
+  { name:"Lajpat Nagar", price:200, color:"pink" },
+  { name:"Malviya Nagar", price:220, color:"pink" },
+  { name:"Saket", price:240, color:"pink" },
+
+  { name:"Kashmere Gate Metro", price:200, type:"metro" },
+
+  { name:"Rohini", price:260, color:"orange" },
+  { name:"Pitampura", price:280, color:"orange" },
+  { name:"Shalimar Bagh", price:300, color:"orange" },
+
+  { name:"Free Parking" },
+
+  { name:"Karol Bagh", price:320, color:"red" },
+  { name:"Narela", price:340, color:"red" },
+  { name:"Punjabi Bagh", price:360, color:"red" },
+
+  { name:"INA Metro", price:200, type:"metro" },
+
+  { name:"Janakpuri", price:380, color:"yellow" },
+  { name:"Dwarka", price:400, color:"yellow" },
+  { name:"Uttam Nagar", price:420, color:"yellow" },
+
+  { name:"Go To Jail" },
+
+  { name:"Vasant Kunj", price:440, color:"green" },
+  { name:"Green Park", price:460, color:"green" },
+  { name:"Hauz Khas", price:480, color:"green" },
+
+  { name:"Central Secretariat Metro", price:200, type:"metro" },
+
+  { name:"Civil Lines", price:500, color:"blue" },
+  { name:"Greater Kailash", price:550, color:"blue" },
+  { name:"Luxury Tax" },
+  { name:"Connaught Place", price:600, color:"blue" }
 ];
 
-const COLOR_GROUPS = {
-  brown: 2, sky: 3, pink: 3, orange: 3,
-  red: 2, yellow: 3, green: 3, blue: 2
-};
+board.forEach(t => {
+  t.owner = null;
+  t.houses = 0;
+});
 
 let players = [];
 let turn = 0;
 let awaitingBuy = null;
 
-function emitState() {
-  io.emit("state", { players, board, turn, awaitingBuy });
+/* ========= HELPERS ========= */
+function emitState(){
+  io.emit("state", { board, players, turn, awaitingBuy });
 }
 
-function nextTurn() {
-  if (players.length === 0) return;
-  turn = (turn + 1) % players.length;
-}
-
+/* ========= SOCKET ========= */
 io.on("connection", socket => {
 
   socket.on("join", name => {
-    if (!name || !name.trim()) return;
-
-    if (players.find(p => p.id === socket.id)) return;
+    if(players.find(p => p.id === socket.id)) return;
 
     players.push({
       id: socket.id,
-      name: name.trim(),
+      name,
       money: 1500,
       pos: 0,
-      jail: false,
-      jailTurns: 0
+      inJail: false
     });
 
-    if (players.length === 1) turn = 0;
     emitState();
   });
 
   socket.on("roll", () => {
-    if (!players.length) return;
-    if (players[turn].id !== socket.id) return;
-
+    if(players.length === 0) return;
     const p = players[turn];
-    const d1 = 1 + Math.floor(Math.random() * 6);
-    const d2 = 1 + Math.floor(Math.random() * 6);
-    const move = d1 + d2;
+    if(p.id !== socket.id) return;
 
-    if (p.jail) {
-      if (d1 === d2) {
-        p.jail = false;
-        p.jailTurns = 0;
-      } else {
-        p.jailTurns++;
-        if (p.jailTurns >= 3) {
-          p.money -= 50;
-          p.jail = false;
-          p.jailTurns = 0;
-        } else {
-          nextTurn();
-          emitState();
-          return;
-        }
-      }
-    }
+    const d1 = Math.floor(Math.random()*6)+1;
+    const d2 = Math.floor(Math.random()*6)+1;
+    const dice = d1 + d2;
 
-    p.pos = (p.pos + move) % board.length;
+    p.pos = (p.pos + dice) % board.length;
     const tile = board[p.pos];
 
-    if (tile.tax) p.money -= tile.tax;
-
-    if (tile.name === "Go To Jail") {
-      p.pos = board.findIndex(t => t.name === "Jail");
-      p.jail = true;
-      nextTurn();
+    // Go To Jail
+    if(tile.name === "Go To Jail"){
+      p.pos = 9;
+      p.inJail = true;
+      turn = (turn+1)%players.length;
       emitState();
       return;
     }
 
-    if (tile.price && !tile.owner) {
-      if (p.money >= tile.price) {
-        awaitingBuy = { tileIndex: p.pos, playerId: p.id };
-        emitState();
-        return;
-      }
+    // Buy
+    if(tile.price && !tile.owner && p.money >= tile.price){
+      awaitingBuy = { tileIndex: p.pos };
+      emitState();
+      return;
     }
 
-    nextTurn();
+    // Rent
+    if(tile.owner && tile.owner !== p.id){
+      const owner = players.find(pl => pl.id === tile.owner);
+      let rent = 0;
+
+      if(tile.type === "metro"){
+        const metros = board.filter(
+          b => b.type==="metro" && b.owner===tile.owner
+        ).length;
+        rent = [0,25,50,100,200][metros];
+      } else {
+        rent = Math.floor(tile.price * 0.1);
+        rent += tile.houses * rent;
+      }
+
+      p.money -= rent;
+      owner.money += rent;
+    }
+
+    turn = (turn+1)%players.length;
     emitState();
   });
 
   socket.on("buy", () => {
-    if (!awaitingBuy) return;
+    if(!awaitingBuy) return;
     const p = players[turn];
     const tile = board[awaitingBuy.tileIndex];
 
-    if (tile.owner || p.money < tile.price) {
-      awaitingBuy = null;
-      nextTurn();
-      emitState();
-      return;
+    if(p.money >= tile.price){
+      p.money -= tile.price;
+      tile.owner = p.id;
     }
 
-    p.money -= tile.price;
-    tile.owner = p.id;
-
     awaitingBuy = null;
-    nextTurn();
+    turn = (turn+1)%players.length;
     emitState();
   });
 
-  socket.on("skipBuy", () => {
-    awaitingBuy = null;
-    nextTurn();
+  socket.on("buildHouse", idx => {
+    const p = players[turn];
+    const tile = board[idx];
+    if(tile.owner !== p.id || !tile.color) return;
+
+    const sameColor = board.filter(b => b.color === tile.color);
+    if(!sameColor.every(b => b.owner === p.id)) return;
+
+    if(tile.houses < 4 && p.money >= 50){
+      p.money -= 50;
+      tile.houses++;
+    }
+
     emitState();
   });
 
-  socket.on("disconnect", () => {
-    players = players.filter(p => p.id !== socket.id);
-    turn = 0;
-    emitState();
-  });
 });
 
-server.listen(process.env.PORT || 3000);
+server.listen(3000, ()=>console.log("SERVER RUNNING"));
