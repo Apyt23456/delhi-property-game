@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 152 81% 96%;
+    --foreground: 152 5% 10%;
+    --card: 152 50% 99%;
+    --card-foreground: 152 5% 15%;
+    --popover: 152 50% 99%;
+    --popover-foreground: 152 95% 10%;
+    --primary: 152 76% 25%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 152 30% 90%;
+    --secondary-foreground: 152 5% 10%;
+    --muted: 114 30% 92%;
+    --muted-foreground: 152 5% 40%;
+    --accent: 114 30% 90%;
+    --accent-foreground: 152 5% 15%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 152 30% 82%;
+    --input: 152 30% 82%;
+    --ring: 152 76% 25%;
+    --radius: 0.5rem;
+    --chart-1: 152 76% 25%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+  }
+
+  .dark {
+    --background: 152 50% 5%;
+    --foreground: 152 5% 99%;
+    --card: 152 50% 10%;
+    --card-foreground: 152 5% 99%;
+    --popover: 152 50% 5%;
+    --popover-foreground: 152 5% 99%;
+    --primary: 152 76% 35%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 152 30% 20%;
+    --secondary-foreground: 0 0% 100%;
+    --muted: 114 30% 20%;
+    --muted-foreground: 152 5% 65%;
+    --accent: 114 30% 20%;
+    --accent-foreground: 152 5% 95%;
+    --destructive: 0 84% 60%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 152 30% 25%;
+    --input: 152 30% 25%;
+    --ring: 152 76% 35%;
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Custom scrollbar for property lists */
+.overflow-y-auto::-webkit-scrollbar {
+  width: 4px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 2px;
+}
+
+.overflow-y-auto::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Dice animation */
+@keyframes dice-roll {
+  0%, 100% { transform: rotate(0deg) scale(1); }
+  25% { transform: rotate(10deg) scale(1.1); }
+  50% { transform: rotate(-10deg) scale(1); }
+  75% { transform: rotate(5deg) scale(1.05); }
+}
+
+.animate-dice-roll {
+  animation: dice-roll 0.3s ease-in-out;
+}
+
+/* Player token pulse */
+@keyframes token-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.2); }
+}
+
+.animate-token-pulse {
+  animation: token-pulse 1s ease-in-out infinite;
+}
