@@ -4,13 +4,11 @@ import "./globals.css";
 
 const inter = Inter({ 
   subsets: ["latin"],
-  variable: "--font-inter",
 });
 
 export const metadata: Metadata = {
   title: "Delhi Monopoly - Digital Board Game",
   description: "Play the classic Monopoly board game with Delhi-themed properties. Experience iconic locations like Connaught Place, India Gate, and Lutyens Delhi.",
-  keywords: ["monopoly", "delhi", "board game", "digital game", "property trading"],
 };
 
 export const viewport: Viewport = {
@@ -27,7 +25,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body className={`${inter.variable} font-sans antialiased`}>
+      <body className={`${inter.className} antialiased`}>
         {children}
       </body>
     </html>
